@@ -134,6 +134,9 @@ export async function POST() {
           }
         }
 
+        // Filter out verification transactions (under Rs.10)
+        rows = rows.filter((r) => r.amount >= 10);
+
         // Save this batch to Supabase immediately
         if (rows.length > 0) {
           const { error: insertError } = await getSupabase()
