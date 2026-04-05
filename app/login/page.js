@@ -6,18 +6,23 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "var(--bg)",
+      background: "var(--bg)", padding: 16,
     }}>
       <div style={{
         background: "var(--bg-card)", borderRadius: "var(--radius-lg)",
         padding: "44px 36px", border: "1px solid var(--border)",
         maxWidth: 400, width: "100%", textAlign: "center",
-        boxShadow: "var(--shadow)",
+        boxShadow: "var(--shadow-hover)",
       }}>
-        <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text)", letterSpacing: -0.5 }}>Vippy</div>
-        <div style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 6 }}>Spend Tracker</div>
         <div style={{
-          fontSize: 11, color: "var(--text-tertiary)", marginBottom: 32,
+          width: 56, height: 56, borderRadius: 14, background: "var(--accent)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 16px", fontSize: 26, color: "#fff", fontWeight: 800,
+        }}>V</div>
+
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)", letterSpacing: -0.5 }}>Vippy Spend Tracker</div>
+        <div style={{
+          fontSize: 12, color: "var(--text-tertiary)", marginTop: 6, marginBottom: 32,
           padding: "4px 12px", background: "var(--bg-secondary)", borderRadius: 20,
           display: "inline-block", border: "1px solid var(--border)",
         }}>
@@ -37,8 +42,8 @@ export default function LoginPage() {
             display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
             cursor: "pointer", boxShadow: "var(--shadow)", transition: "background 0.15s, box-shadow 0.15s",
           }}
-          onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
-          onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-card)"}
+          onMouseOver={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-hover)"; }}
+          onMouseOut={(e) => { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.boxShadow = "var(--shadow)"; }}
           onFocus={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-hover)"; }}
           onBlur={(e) => { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.boxShadow = "var(--shadow)"; }}
         >

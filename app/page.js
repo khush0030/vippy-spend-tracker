@@ -43,7 +43,15 @@ function useTheme() {
     localStorage.setItem("vippy-theme", next);
     document.documentElement.setAttribute("data-theme", next);
   }, [theme]);
-  return { theme, toggle };
+
+  // Resolved colors for Chart.js (can't use CSS vars)
+  const chartColors = useMemo(() => ({
+    text: theme === "dark" ? "#a0a09c" : "#6b6b68",
+    textLight: theme === "dark" ? "#6b6b68" : "#9b9b97",
+    grid: theme === "dark" ? "#333333" : "#e3e3e0",
+  }), [theme]);
+
+  return { theme, toggle, chartColors };
 }
 
 // ── User Menu ──
@@ -187,18 +195,18 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           <div style={{
-            width: 44, height: 44, borderRadius: 10, background: cat.color + "18",
+            width: 44, height: 44, borderRadius: 10, background: cat.color + "22",
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
           }}>{cat.icon}</div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 17, color: "var(--text)" }}>{t.merchant}</div>
-            <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: cat.color + "18", color: cat.color }}>{cat.label}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: cat.color + "22", color: cat.color }}>{cat.label}</span>
           </div>
         </div>
 
         <div style={{ fontSize: 30, fontWeight: 700, marginBottom: 20, color: t.isRefund ? "var(--success)" : "var(--text)", fontVariantNumeric: "tabular-nums" }}>
           {t.isRefund ? "+" : ""}{fmt(t.amount)}
-          {t.isRefund && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--success)", background: "#4caf5018", padding: "2px 8px", borderRadius: 4, marginLeft: 8, verticalAlign: "middle" }}>REFUND</span>}
+          {t.isRefund && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--success)", background: "var(--success-bg)", padding: "2px 8px", borderRadius: 4, marginLeft: 8, verticalAlign: "middle" }}>REFUND</span>}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -352,7 +360,7 @@ function InsightsPanel({ transactions, isMobile }) {
 }
 
 // ── Overview Tab ──
-function OverviewTab({ transactions, isMobile }) {
+function OverviewTab({ transactions, isMobile, chartColors = {} }) {
   const purchases = transactions.filter((t) => !t.isRefund);
   const refunds = transactions.filter((t) => t.isRefund);
   const totalR = refunds.reduce((s, t) => s + t.amount, 0);
@@ -366,7 +374,8 @@ function OverviewTab({ transactions, isMobile }) {
   const donutData = { labels: cats.map(([c]) => CATEGORIES[c]?.label || c), datasets: [{ data: cats.map(([, v]) => v), backgroundColor: cats.map(([c]) => CATEGORIES[c]?.color || "#795548"), borderWidth: 0 }] };
   const barData = { labels: cats.map(([c]) => CATEGORIES[c]?.label || c), datasets: [{ label: "Spend", data: cats.map(([, v]) => v), backgroundColor: cats.map(([c]) => CATEGORIES[c]?.color || "#795548"), borderRadius: 4 }] };
 
-  const chartOpts = { plugins: { legend: { labels: { color: "var(--text-secondary)", font: { size: 11 } } } } };
+  const tc = chartColors.text || "#6b6b68";
+  const tcl = chartColors.textLight || "#9b9b97";
 
   return (
     <div>
@@ -383,14 +392,14 @@ function OverviewTab({ transactions, isMobile }) {
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: isMobile ? 16 : 22, boxShadow: "var(--shadow)" }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, color: "var(--text)" }}>Category Split</h3>
           <div style={{ maxWidth: isMobile ? 200 : 240, margin: "0 auto" }}>
-            <Doughnut data={donutData} options={{ cutout: "65%", ...chartOpts, plugins: { ...chartOpts.plugins, legend: { position: "bottom", labels: { boxWidth: 10, padding: 8, color: "var(--text-secondary)", font: { size: 11 } } } } }} />
+            <Doughnut data={donutData} options={{ cutout: "65%", plugins: { legend: { position: "bottom", labels: { boxWidth: 10, padding: 8, color: tc, font: { size: 11 } } } } }} />
           </div>
         </div>
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: isMobile ? 16 : 22, boxShadow: "var(--shadow)" }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, color: "var(--text)" }}>Breakdown</h3>
-          <Bar data={barData} options={{ indexAxis: "y", ...chartOpts, plugins: { legend: { display: false } }, scales: {
-            x: { grid: { display: false, color: "var(--border)" }, ticks: { callback: (v) => "\u20B9" + v.toLocaleString("en-IN"), color: "var(--text-tertiary)", font: { size: 11 } } },
-            y: { grid: { display: false }, ticks: { color: "var(--text-secondary)", font: { size: 11 } } },
+          <Bar data={barData} options={{ indexAxis: "y", plugins: { legend: { display: false } }, scales: {
+            x: { grid: { display: false }, ticks: { callback: (v) => "\u20B9" + v.toLocaleString("en-IN"), color: tcl, font: { size: 11 } } },
+            y: { grid: { display: false }, ticks: { color: tc, font: { size: 11 } } },
           } }} />
         </div>
       </div>
@@ -444,7 +453,7 @@ function TransactionsTab({ transactions, onToggleReceipt, onSelect, isMobile }) 
               onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-card)"}
             >
               <div style={{
-                width: 34, height: 34, borderRadius: 8, background: cat.color + "14",
+                width: 34, height: 34, borderRadius: 8, background: cat.color + "22",
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0,
               }}>{cat.icon}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -651,7 +660,7 @@ function mapRows(rows) {
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { theme, toggle: toggleTheme } = useTheme();
+  const { theme, toggle: toggleTheme, chartColors } = useTheme();
   const [allTransactions, setAllTransactions] = useState([]);
   const [activeTab, setActiveTab] = useState("overview");
   const [syncing, setSyncing] = useState(false);
@@ -794,7 +803,7 @@ export default function Home() {
             <div style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>No transactions in this date range.</div>
           ) : (
             <>
-              {activeTab === "overview" && <OverviewTab transactions={transactions} isMobile={isMobile} />}
+              {activeTab === "overview" && <OverviewTab transactions={transactions} isMobile={isMobile} chartColors={chartColors} />}
               {activeTab === "transactions" && <TransactionsTab transactions={transactions} onToggleReceipt={handleToggleReceipt} onSelect={setSelectedTxn} isMobile={isMobile} />}
               {activeTab === "receipts" && <ReceiptsTab transactions={transactions} onToggleReceipt={handleToggleReceipt} isMobile={isMobile} />}
               {activeTab === "reports" && <ReportsTab transactions={transactions} startDate={startDate} endDate={endDate} isMobile={isMobile} />}
