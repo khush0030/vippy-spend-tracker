@@ -35,11 +35,16 @@ export async function PATCH(request) {
   }
 
   try {
-    const { id, hasReceipt } = await request.json();
+    const body = await request.json();
+    const { id } = body;
+
+    const updates = {};
+    if (body.hasReceipt !== undefined) updates.has_receipt = body.hasReceipt;
+    if (body.userNotes !== undefined) updates.user_notes = body.userNotes;
 
     const { error } = await getSupabase()
       .from("transactions")
-      .update({ has_receipt: hasReceipt })
+      .update(updates)
       .eq("id", id)
       .eq("user_id", session.user.id);
 

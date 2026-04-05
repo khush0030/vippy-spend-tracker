@@ -40,9 +40,27 @@ function useIsMobile() {
 }
 
 // ── Transaction Detail Modal ──
-function TransactionModal({ transaction: t, onClose }) {
+function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
+  const [userNotes, setUserNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (t) setUserNotes(t.userNotes || "");
+  }, [t]);
+
   if (!t) return null;
   const cat = CATEGORIES[t.category] || CATEGORIES.other;
+
+  const handleSaveNotes = async () => {
+    setSaving(true);
+    await fetch("/api/transactions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: t.id, userNotes }),
+    });
+    onUpdateNotes(t.id, userNotes);
+    setSaving(false);
+  };
 
   return (
     <div
@@ -58,6 +76,7 @@ function TransactionModal({ transaction: t, onClose }) {
         style={{
           background: "#fff", borderRadius: 16, padding: "32px 28px",
           maxWidth: 480, width: "100%", position: "relative",
+          maxHeight: "90vh", overflowY: "auto",
         }}
       >
         <button
@@ -110,6 +129,30 @@ function TransactionModal({ transaction: t, onClose }) {
           )}
           <DetailRow label="Receipt" value={t.hasReceipt ? "Attached" : "Missing"} />
           {t.rawEmail && <DetailRow label="Email Subject" value={t.rawEmail} />}
+
+          {/* User Notes */}
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 6 }}>Your Notes</div>
+            <textarea
+              value={userNotes}
+              onChange={(e) => setUserNotes(e.target.value)}
+              placeholder="Add a note about this transaction..."
+              style={{
+                width: "100%", padding: "10px 14px", border: "1px solid #ddd",
+                borderRadius: 8, fontSize: 13, outline: "none", resize: "vertical",
+                minHeight: 70, fontFamily: "inherit", lineHeight: 1.5,
+              }}
+            />
+            <button
+              onClick={handleSaveNotes}
+              disabled={saving}
+              style={{
+                marginTop: 8, padding: "8px 18px", borderRadius: 6, border: "none",
+                background: saving ? "#eee" : "#1a1a1a", color: saving ? "#999" : "#fff",
+                fontSize: 12, fontWeight: 600,
+              }}
+            >{saving ? "Saving..." : "Save Note"}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -493,6 +536,180 @@ function ReceiptsTab({ transactions, onToggleReceipt, isMobile }) {
   );
 }
 
+// ── Reports Tab ──
+function ReportsTab({ transactions, startDate, endDate, isMobile }) {
+  const [generating, setGenerating] = useState(false);
+  const [report, setReport] = useState(null);
+
+  const purchases = transactions.filter((t) => !t.isRefund);
+  const refunds = transactions.filter((t) => t.isRefund);
+  const totalSpend = purchases.reduce((s, t) => s + t.amount, 0);
+  const totalRefunds = refunds.reduce((s, t) => s + t.amount, 0);
+  const missingReceipts = transactions.filter((t) => !t.hasReceipt && !t.isRefund);
+
+  const categoryTotals = {};
+  for (const t of purchases) {
+    categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+  }
+  const catsSorted = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+
+  const downloadCSV = () => {
+    const params = new URLSearchParams();
+    params.set("format", "csv");
+    if (startDate) params.set("start", startDate);
+    if (endDate) params.set("end", endDate);
+    window.open(`/api/reports?${params.toString()}`, "_blank");
+  };
+
+  const generateSummary = async () => {
+    setGenerating(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("format", "json");
+      if (startDate) params.set("start", startDate);
+      if (endDate) params.set("end", endDate);
+      const res = await fetch(`/api/reports?${params.toString()}`);
+      const data = await res.json();
+      setReport(data.report);
+    } catch {
+      setReport(null);
+    }
+    setGenerating(false);
+  };
+
+  const periodLabel = startDate && endDate
+    ? `${formatDate(startDate)} - ${formatDate(endDate)}`
+    : "All time";
+
+  return (
+    <div>
+      {/* Export actions */}
+      <div style={{
+        display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap",
+      }}>
+        <button onClick={downloadCSV} style={{
+          padding: "10px 20px", borderRadius: 8, border: "1px solid #1a1a1a",
+          background: "#fff", color: "#1a1a1a", fontSize: 13, fontWeight: 600,
+          display: "flex", alignItems: "center", gap: 6,
+        }}>
+          <span style={{ fontSize: 16 }}>&#128196;</span> Download CSV
+        </button>
+        <button onClick={generateSummary} disabled={generating} style={{
+          padding: "10px 20px", borderRadius: 8, border: "none",
+          background: generating ? "#eee" : "#1a1a1a", color: generating ? "#999" : "#fff",
+          fontSize: 13, fontWeight: 600,
+          display: "flex", alignItems: "center", gap: 6,
+        }}>
+          <span style={{ fontSize: 16 }}>&#128202;</span> {generating ? "Generating..." : "Generate Report"}
+        </button>
+      </div>
+
+      {/* Summary Report Card */}
+      <div style={{
+        background: "#fff", border: "1px solid #e8e8e8", borderRadius: 12,
+        padding: isMobile ? 18 : 28, marginBottom: 20,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700 }}>Expense Report</h3>
+          <span style={{ fontSize: 12, color: "#888", background: "#f5f5f5", padding: "4px 12px", borderRadius: 20 }}>{periodLabel}</span>
+        </div>
+
+        {/* Summary grid */}
+        <div style={{
+          display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr",
+          gap: 12, marginBottom: 24,
+        }}>
+          <div style={{ padding: 14, background: "#f9f9f9", borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>GROSS SPEND</div>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>{formatCurrency(totalSpend)}</div>
+          </div>
+          <div style={{ padding: 14, background: "#f9f9f9", borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>REFUNDS</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#4CAF50" }}>{formatCurrency(totalRefunds)}</div>
+          </div>
+          <div style={{ padding: 14, background: "#f9f9f9", borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>NET SPEND</div>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>{formatCurrency(totalSpend - totalRefunds)}</div>
+          </div>
+          <div style={{ padding: 14, background: missingReceipts.length > 0 ? "#FFF5F5" : "#f9f9f9", borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>MISSING RECEIPTS</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: missingReceipts.length > 0 ? "#E91E63" : "#1a1a1a" }}>{missingReceipts.length}</div>
+          </div>
+        </div>
+
+        {/* Category breakdown table */}
+        <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Category Breakdown</h4>
+        <div style={{ borderRadius: 10, border: "1px solid #f0f0f0", overflow: "hidden" }}>
+          <div style={{
+            display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr",
+            padding: "10px 16px", background: "#f9f9f9",
+            fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase",
+          }}>
+            <span>Category</span>
+            <span style={{ textAlign: "right" }}>Amount</span>
+            <span style={{ textAlign: "right" }}>% of Total</span>
+            <span style={{ textAlign: "right" }}>Count</span>
+          </div>
+          {catsSorted.map(([cat, total]) => {
+            const info = CATEGORIES[cat] || CATEGORIES.other;
+            const count = purchases.filter((t) => t.category === cat).length;
+            const pct = totalSpend > 0 ? ((total / totalSpend) * 100).toFixed(1) : 0;
+            return (
+              <div key={cat} style={{
+                display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr",
+                padding: "10px 16px", borderTop: "1px solid #f0f0f0",
+                fontSize: 13, alignItems: "center",
+              }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>{info.icon}</span>
+                  <span style={{ fontWeight: 500 }}>{info.label}</span>
+                </span>
+                <span style={{ textAlign: "right", fontWeight: 600 }}>{formatCurrency(total)}</span>
+                <span style={{ textAlign: "right", color: "#888" }}>{pct}%</span>
+                <span style={{ textAlign: "right", color: "#888" }}>{count}</span>
+              </div>
+            );
+          })}
+          <div style={{
+            display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr",
+            padding: "10px 16px", borderTop: "2px solid #e8e8e8",
+            fontSize: 13, fontWeight: 700, background: "#f9f9f9",
+          }}>
+            <span>Total</span>
+            <span style={{ textAlign: "right" }}>{formatCurrency(totalSpend)}</span>
+            <span style={{ textAlign: "right" }}>100%</span>
+            <span style={{ textAlign: "right" }}>{purchases.length}</span>
+          </div>
+        </div>
+
+        {/* Missing receipts list */}
+        {missingReceipts.length > 0 && (
+          <>
+            <h4 style={{ fontSize: 14, fontWeight: 600, marginTop: 24, marginBottom: 12, color: "#E91E63" }}>
+              Missing Receipts ({missingReceipts.length})
+            </h4>
+            <div style={{ borderRadius: 10, border: "1px solid #FFE0E0", overflow: "hidden" }}>
+              {missingReceipts.map((t, i) => (
+                <div key={t.id} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "8px 16px", borderTop: i > 0 ? "1px solid #FFE0E0" : "none",
+                  background: "#FFF5F5", fontSize: 13,
+                }}>
+                  <span>{t.merchant}</span>
+                  <span style={{ display: "flex", gap: 16 }}>
+                    <span style={{ color: "#888" }}>{formatDate(t.date)}</span>
+                    <span style={{ fontWeight: 600 }}>{formatCurrency(t.amount)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Map Supabase rows ──
 function mapRows(rows) {
   return rows.map((r) => ({
@@ -506,6 +723,7 @@ function mapRows(rows) {
     isRefund: r.is_refund || false,
     notes: r.notes || null,
     txnTime: r.txn_time || null,
+    userNotes: r.user_notes || "",
     rawEmail: r.raw_email,
   }));
 }
@@ -611,6 +829,7 @@ export default function Home() {
     { key: "overview", label: "Overview" },
     { key: "transactions", label: "Transactions" },
     { key: "receipts", label: "Receipts" },
+    { key: "reports", label: "Reports" },
   ];
 
   return (
@@ -706,13 +925,22 @@ export default function Home() {
               {activeTab === "overview" && <OverviewTab transactions={transactions} isMobile={isMobile} />}
               {activeTab === "transactions" && <TransactionsTab transactions={transactions} onToggleReceipt={handleToggleReceipt} onSelect={setSelectedTxn} isMobile={isMobile} />}
               {activeTab === "receipts" && <ReceiptsTab transactions={transactions} onToggleReceipt={handleToggleReceipt} isMobile={isMobile} />}
+              {activeTab === "reports" && <ReportsTab transactions={transactions} startDate={startDate} endDate={endDate} isMobile={isMobile} />}
             </>
           )}
         </>
       )}
 
       {/* Transaction Detail Modal */}
-      <TransactionModal transaction={selectedTxn} onClose={() => setSelectedTxn(null)} />
+      <TransactionModal
+        transaction={selectedTxn}
+        onClose={() => setSelectedTxn(null)}
+        onUpdateNotes={(id, notes) => {
+          setAllTransactions((prev) =>
+            prev.map((t) => t.id === id ? { ...t, userNotes: notes } : t)
+          );
+        }}
+      />
     </div>
   );
 }
