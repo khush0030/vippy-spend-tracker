@@ -8,7 +8,7 @@ let isSyncing = false;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `You are a financial data extraction assistant. Parse bank transaction alert emails and Amazon order emails into structured transaction data.
+const SYSTEM_PROMPT = `You are a financial data extraction assistant. Parse bank transaction alert emails, Amazon order emails, and Amazon return/refund emails into structured transaction data.
 
 For each email, extract:
 - merchant: the merchant/vendor name
@@ -16,10 +16,17 @@ For each email, extract:
 - date: ISO date string (YYYY-MM-DD)
 - category: one of: amazon, fuel, dining, swiggy, utilities, subscriptions, office, travel, other
 - hasReceipt: true if it's an Amazon order (they include GST invoices), false otherwise
-- itemDescription: for Amazon orders, extract the item name/description if available. For other transactions, leave as null.
+- itemDescription: for Amazon orders/returns, extract the item name/description if available. For other transactions, leave as null.
+- isRefund: true if this is a return, refund, reversal, or cashback credit. false for normal purchases.
+
+IMPORTANT rules:
+- If an email is about an Amazon return, refund, or cancellation → set isRefund: true
+- If an HDFC email mentions "refund", "reversal", "credit", or "cashback" → set isRefund: true
+- Verification transactions (typically Rs.1 or Rs.2) should be skipped entirely.
+- If an email doesn't contain a valid transaction, skip it.
 
 Category rules:
-- Amazon orders → "amazon"
+- Amazon orders/returns → "amazon"
 - Petrol/diesel/fuel stations (HP, BPCL, Indian Oil, etc.) → "fuel"
 - Restaurants, cafes, food courts → "dining"
 - Swiggy, Zomato → "swiggy"
@@ -29,8 +36,7 @@ Category rules:
 - Airlines, hotels, trains, Uber, Ola, cabs → "travel"
 - Everything else → "other"
 
-Return ONLY a valid JSON array. Each object must have: merchant, amount, date, category, hasReceipt, itemDescription.
-If an email doesn't contain a valid transaction, skip it.`;
+Return ONLY a valid JSON array. Each object must have: merchant, amount, date, category, hasReceipt, itemDescription, isRefund.`;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -64,6 +70,7 @@ async function parseBatch(emailBatch) {
       category: t.category || "other",
       has_receipt: Boolean(t.hasReceipt),
       item_description: t.itemDescription || null,
+      is_refund: Boolean(t.isRefund),
       raw_email: emailBatch[i]?.subject || "",
     }));
   } catch (err) {

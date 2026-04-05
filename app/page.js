@@ -107,13 +107,21 @@ function MetricCard({ title, value, subtitle, isMobile }) {
 
 // ── Overview Tab ──
 function OverviewTab({ transactions, isMobile }) {
+  const purchases = transactions.filter((t) => !t.isRefund);
+  const refunds = transactions.filter((t) => t.isRefund);
+  const totalRefunds = refunds.reduce((s, t) => s + t.amount, 0);
+
   const categoryTotals = {};
-  for (const t of transactions) {
+  for (const t of purchases) {
     categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
   }
+  // Subtract refunds from their categories
+  for (const t of refunds) {
+    categoryTotals[t.category] = (categoryTotals[t.category] || 0) - t.amount;
+  }
 
-  const cats = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
-  const totalSpend = transactions.reduce((s, t) => s + t.amount, 0);
+  const cats = Object.entries(categoryTotals).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const totalSpend = purchases.reduce((s, t) => s + t.amount, 0) - totalRefunds;
   const withReceipt = transactions.filter((t) => t.hasReceipt).length;
 
   const donutData = {
@@ -138,10 +146,10 @@ function OverviewTab({ transactions, isMobile }) {
   return (
     <div>
       <div style={{ display: "flex", gap: isMobile ? 8 : 16, flexWrap: "wrap", marginBottom: isMobile ? 20 : 32 }}>
-        <MetricCard isMobile={isMobile} title="Total Spend" value={formatCurrency(totalSpend)} subtitle="Selected period" />
-        <MetricCard isMobile={isMobile} title="Transactions" value={transactions.length} subtitle="Synced from Gmail" />
+        <MetricCard isMobile={isMobile} title="Net Spend" value={formatCurrency(totalSpend)} subtitle="After refunds" />
+        <MetricCard isMobile={isMobile} title="Transactions" value={purchases.length} subtitle={refunds.length > 0 ? `${refunds.length} refunds` : "Synced"} />
+        <MetricCard isMobile={isMobile} title="Refunds" value={formatCurrency(totalRefunds)} subtitle={`${refunds.length} returns`} />
         <MetricCard isMobile={isMobile} title="Receipts" value={`${withReceipt}/${transactions.length}`} subtitle="Attached" />
-        <MetricCard isMobile={isMobile} title="Categories" value={cats.length} subtitle="Detected" />
       </div>
 
       <div style={{
@@ -248,6 +256,12 @@ function TransactionsTab({ transactions, onToggleReceipt, isMobile }) {
               {t.itemDescription && (
                 <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{t.itemDescription}</div>
               )}
+              {t.isRefund && (
+                <span style={{
+                  fontSize: 10, fontWeight: 600, color: "#4CAF50", background: "#E8F5E9",
+                  padding: "1px 6px", borderRadius: 4, marginTop: 2, display: "inline-block",
+                }}>REFUND</span>
+              )}
             </div>
             {!isMobile && (
               <span style={{
@@ -262,8 +276,9 @@ function TransactionsTab({ transactions, onToggleReceipt, isMobile }) {
               fontWeight: 700, fontSize: isMobile ? 15 : 16,
               minWidth: isMobile ? "auto" : 100, textAlign: "right",
               marginLeft: isMobile ? "auto" : 0,
+              color: t.isRefund ? "#4CAF50" : "#1a1a1a",
             }}>
-              {formatCurrency(t.amount)}
+              {t.isRefund ? "+" : ""}{formatCurrency(t.amount)}
             </div>
             <button
               onClick={() => onToggleReceipt(t.id)}
@@ -365,6 +380,7 @@ function mapRows(rows) {
     category: r.category,
     hasReceipt: r.has_receipt,
     itemDescription: r.item_description,
+    isRefund: r.is_refund || false,
     rawEmail: r.raw_email,
   }));
 }
@@ -380,9 +396,10 @@ export default function Home() {
   const [endDate, setEndDate] = useState("");
   const isMobile = useIsMobile();
 
-  // Filter transactions by date range
+  // Filter transactions by date range + remove verification charges under Rs.10
   const transactions = useMemo(() => {
     return allTransactions.filter((t) => {
+      if (t.amount < 10) return false; // Skip verification transactions
       if (startDate && t.date < startDate) return false;
       if (endDate && t.date > endDate) return false;
       return true;
