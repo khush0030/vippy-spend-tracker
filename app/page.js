@@ -557,7 +557,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (status === "authenticated") loadTransactions();
+    if (status === "authenticated") {
+      // Claim any orphaned transactions (from before auth was added)
+      fetch("/api/transactions/claim", { method: "POST" })
+        .then(() => loadTransactions())
+        .catch(() => loadTransactions());
+    }
   }, [status, loadTransactions]);
 
   const handleSync = useCallback(async () => {
