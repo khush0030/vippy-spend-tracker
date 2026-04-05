@@ -308,22 +308,36 @@ export default function Home() {
 
   const handleSync = useCallback(async () => {
     setSyncing(true);
-    setMessage("");
-    try {
-      const res = await fetch("/api/sync", { method: "POST" });
-      const data = await res.json();
-      if (data.error) {
-        setMessage("Error: " + data.error);
-      } else {
-        setTransactions(mapRows(data.transactions || []));
-        setMessage(data.message);
-      }
-    } catch (err) {
-      setMessage("Sync failed: " + err.message);
-    } finally {
-      setSyncing(false);
-    }
-  }, []);
+    setMessage("Syncing... transactions will appear as they're processed.");
+
+    // Start sync in background (don't await — it takes minutes)
+    fetch("/api/sync", { method: "POST" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error && data.error !== "Sync already in progress. Please wait for it to finish.") {
+          setMessage("Error: " + data.error);
+        } else {
+          setMessage(data.message || "Sync complete!");
+          loadTransactions();
+        }
+        setSyncing(false);
+      })
+      .catch((err) => {
+        setMessage("Sync failed: " + err.message);
+        setSyncing(false);
+      });
+
+    // Poll for new transactions every 30s while sync is running
+    const pollInterval = setInterval(async () => {
+      await loadTransactions();
+    }, 30000);
+
+    // Stop polling after 40 minutes max
+    setTimeout(() => clearInterval(pollInterval), 40 * 60 * 1000);
+
+    // Store interval so we can clear on unmount (not critical for this app)
+    return () => clearInterval(pollInterval);
+  }, [loadTransactions]);
 
   const handleToggleReceipt = useCallback((id) => {
     setTransactions((prev) => {
@@ -413,7 +427,7 @@ export default function Home() {
       </div>
 
       {/* Content */}
-      {transactions.length === 0 && !syncing ? (
+      {transactions.length === 0 && !syncing && !message ? (
         <div style={{ textAlign: "center", padding: "80px 20px" }}>
           <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }}>&#128202;</div>
           <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>No transactions yet</h2>
@@ -453,6 +467,14 @@ export default function Home() {
         </div>
       ) : (
         <>
+          {syncing && (
+            <div style={{
+              padding: "12px 20px", background: "#FFF8E1", border: "1px solid #FFE082",
+              borderRadius: 8, marginBottom: 20, fontSize: 13, color: "#F57F17",
+            }}>
+              Sync in progress — new transactions will appear automatically every 30 seconds...
+            </div>
+          )}
           {activeTab === "overview" && <OverviewTab transactions={transactions} />}
           {activeTab === "transactions" && <TransactionsTab transactions={transactions} onToggleReceipt={handleToggleReceipt} />}
           {activeTab === "receipts" && <ReceiptsTab transactions={transactions} onToggleReceipt={handleToggleReceipt} />}
