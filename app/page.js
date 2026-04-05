@@ -175,12 +175,15 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
         maxWidth: 460, width: "100%", position: "relative", boxShadow: "var(--shadow-hover)",
         maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border)",
       }}>
-        <button onClick={onClose} style={{
+        <button onClick={onClose} aria-label="Close" style={{
           position: "absolute", top: 14, right: 14, border: "none",
           background: "var(--bg-tertiary)", width: 28, height: 28, borderRadius: 6,
           fontSize: 16, color: "var(--text-secondary)", display: "flex",
-          alignItems: "center", justifyContent: "center",
-        }}>&times;</button>
+          alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s",
+        }}
+          onMouseOver={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+          onMouseOut={(e) => { e.currentTarget.style.background = "var(--bg-tertiary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+        >&times;</button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           <div style={{
@@ -219,7 +222,7 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
             placeholder="Add a note..."
             style={{
               width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius)",
-              fontSize: 13, outline: "none", resize: "vertical", minHeight: 60, lineHeight: 1.5,
+              fontSize: 13, resize: "vertical", minHeight: 60, lineHeight: 1.5,
               background: "var(--bg-card)", color: "var(--text)",
             }}
             onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
@@ -256,7 +259,7 @@ function Row({ label, value }) {
 function DateRangePicker({ startDate, endDate, onStartChange, onEndChange, onPreset, isMobile }) {
   const inputStyle = {
     padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6,
-    fontSize: 13, outline: "none", background: "var(--bg-card)", color: "var(--text)",
+    fontSize: 13, background: "var(--bg-card)", color: "var(--text)",
     flex: isMobile ? "1 1 auto" : "0 0 auto",
   };
   return (
@@ -273,7 +276,11 @@ function DateRangePicker({ startDate, endDate, onStartChange, onEndChange, onPre
           <button key={p.l} onClick={() => onPreset(p.d)} style={{
             padding: "4px 10px", borderRadius: 5, border: "1px solid var(--border)",
             background: "var(--bg-card)", fontSize: 11, fontWeight: 500, color: "var(--text-secondary)",
-          }}>{p.l}</button>
+            transition: "background 0.1s, color 0.1s",
+          }}
+            onMouseOver={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+          >{p.l}</button>
         ))}
       </div>
     </div>
@@ -403,7 +410,7 @@ function TransactionsTab({ transactions, onToggleReceipt, onSelect, isMobile }) 
 
   const inputStyle = {
     padding: "8px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius)",
-    fontSize: 13, outline: "none", background: "var(--bg-card)", color: "var(--text)",
+    fontSize: 13, background: "var(--bg-card)", color: "var(--text)",
   };
 
   return (
@@ -453,16 +460,22 @@ function TransactionsTab({ transactions, onToggleReceipt, onSelect, isMobile }) 
                 whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
               }}>{t.isRefund ? "+" : ""}{fmt(t.amount)}</div>
               <button onClick={(e) => { e.stopPropagation(); onToggleReceipt(t.id); }}
+                title={t.hasReceipt ? "Receipt attached \u2014 click to remove" : "Mark receipt as attached"}
+                aria-label={t.hasReceipt ? "Receipt attached" : "Receipt missing"}
                 style={{
                   width: 26, height: 26, borderRadius: 6, border: "1px solid var(--border)",
                   background: t.hasReceipt ? "var(--success)" : "var(--bg-card)",
                   color: t.hasReceipt ? "#fff" : "var(--text-tertiary)",
                   fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                }}>{t.hasReceipt ? "\u2713" : "\u25CB"}</button>
+                  transition: "background 0.15s, border-color 0.15s",
+                }}
+                onMouseOver={(e) => { if (!t.hasReceipt) e.currentTarget.style.borderColor = "var(--success)"; }}
+                onMouseOut={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+              >{t.hasReceipt ? "\u2713" : "\u25CB"}</button>
             </div>
           );
         })}
-        {filtered.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>No transactions found</div>}
+        {filtered.length === 0 && <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--text-tertiary)" }}><div style={{ fontSize: 32, marginBottom: 8, opacity: 0.3 }}>{"\uD83D\uDD0D"}</div><div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4, color: "var(--text-secondary)" }}>No transactions found</div><div style={{ fontSize: 12 }}>Try a different search term or category filter.</div></div>}
       </div>
     </div>
   );
@@ -703,7 +716,7 @@ export default function Home() {
   }, []);
 
   if (status === "loading" || status === "unauthenticated") {
-    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}><div style={{ color: "var(--text-tertiary)" }}>Loading...</div></div>;
+    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}><div style={{ color: "var(--text-tertiary)", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><div style={{ width: 24, height: 24, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /><span style={{ fontSize: 13 }}>Loading...</span></div></div>;
   }
 
   const tabs = [
@@ -726,8 +739,12 @@ export default function Home() {
           <button onClick={handleSync} disabled={syncing} style={{
             padding: "7px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)",
             background: syncing ? "var(--bg-tertiary)" : "var(--bg-card)", color: syncing ? "var(--text-tertiary)" : "var(--text)",
-            fontSize: 13, fontWeight: 500, boxShadow: "var(--shadow)",
-          }}>{syncing ? "Syncing..." : "Sync Gmail"}</button>
+            fontSize: 13, fontWeight: 500, boxShadow: "var(--shadow)", transition: "background 0.15s, box-shadow 0.15s",
+            cursor: syncing ? "not-allowed" : "pointer", opacity: syncing ? 0.7 : 1,
+          }}
+            onMouseOver={(e) => { if (!syncing) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-hover)"; } }}
+            onMouseOut={(e) => { e.currentTarget.style.background = syncing ? "var(--bg-tertiary)" : "var(--bg-card)"; e.currentTarget.style.boxShadow = "var(--shadow)"; }}
+          >{syncing ? "Syncing..." : "Sync Gmail"}</button>
           <UserMenu session={session} theme={theme} onToggleTheme={toggleTheme} isMobile={isMobile} />
         </div>
       </div>
@@ -740,8 +757,12 @@ export default function Home() {
             fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 400,
             color: activeTab === tab.key ? "var(--text)" : "var(--text-tertiary)",
             borderBottom: activeTab === tab.key ? "2px solid var(--text)" : "2px solid transparent",
-            marginBottom: -1, whiteSpace: "nowrap",
-          }}>{tab.label}</button>
+            marginBottom: -1, whiteSpace: "nowrap", transition: "color 0.15s, background 0.15s",
+            borderRadius: "4px 4px 0 0",
+          }}
+            onMouseOver={(e) => { if (activeTab !== tab.key) e.currentTarget.style.color = "var(--text-secondary)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseOut={(e) => { e.currentTarget.style.color = activeTab === tab.key ? "var(--text)" : "var(--text-tertiary)"; e.currentTarget.style.background = "none"; }}
+          >{tab.label}</button>
         ))}
       </div>
 

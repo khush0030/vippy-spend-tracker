@@ -35,10 +35,12 @@ export default function LoginPage() {
             border: "1px solid var(--border)", background: "var(--bg-card)",
             fontSize: 14, fontWeight: 500, color: "var(--text)",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-            cursor: "pointer", boxShadow: "var(--shadow)",
+            cursor: "pointer", boxShadow: "var(--shadow)", transition: "background 0.15s, box-shadow 0.15s",
           }}
           onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
           onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-card)"}
+          onFocus={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-hover)"; }}
+          onBlur={(e) => { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.boxShadow = "var(--shadow)"; }}
         >
           <svg width="18" height="18" viewBox="0 0 48 48">
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>

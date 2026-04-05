@@ -41,9 +41,9 @@
   --accent: #529cca;
   --shadow: 0 1px 3px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.04);
   --shadow-hover: 0 2px 8px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06);
-  --success: #4caf50;
-  --danger: #eb5757;
-  --warning: #f2c94c;
+  --success: #66bb6a;
+  --danger: #f07070;
+  --warning: #f5d76e;
 }
 
 html {
@@ -71,6 +71,14 @@ button {
   font-family: inherit;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 ::selection {
   background: var(--accent);
   color: #fff;
@@ -80,4 +88,8 @@ input, select, textarea {
   font-family: inherit;
   color: var(--text);
   background: var(--bg-card);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
