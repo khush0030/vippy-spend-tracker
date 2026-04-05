@@ -17,10 +17,8 @@ export async function GET() {
       .order("date", { ascending: false });
 
     if (error) throw error;
-
     return NextResponse.json({ transactions: data });
   } catch (error) {
-    console.error("Load error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to load transactions" },
       { status: 500 }
@@ -37,10 +35,17 @@ export async function PATCH(request) {
   try {
     const body = await request.json();
     const { id } = body;
+    if (!id) {
+      return NextResponse.json({ error: "Missing transaction id" }, { status: 400 });
+    }
 
     const updates = {};
     if (body.hasReceipt !== undefined) updates.has_receipt = body.hasReceipt;
     if (body.userNotes !== undefined) updates.user_notes = body.userNotes;
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    }
 
     const { error } = await getSupabase()
       .from("transactions")
@@ -49,10 +54,8 @@ export async function PATCH(request) {
       .eq("user_id", session.user.id);
 
     if (error) throw error;
-
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Update error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to update transaction" },
       { status: 500 }

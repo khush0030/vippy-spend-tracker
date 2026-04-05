@@ -145,13 +145,23 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
   if (!t) return null;
   const cat = CATEGORIES[t.category] || CATEGORIES.other;
 
+  const [saveStatus, setSaveStatus] = useState("");
+
   const handleSaveNotes = async () => {
     setSaving(true);
-    await fetch("/api/transactions", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: t.id, userNotes }),
-    });
-    onUpdateNotes(t.id, userNotes);
+    setSaveStatus("");
+    try {
+      const res = await fetch("/api/transactions", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: t.id, userNotes }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      onUpdateNotes(t.id, userNotes);
+      setSaveStatus("Saved");
+      setTimeout(() => setSaveStatus(""), 2000);
+    } catch {
+      setSaveStatus("Error saving");
+    }
     setSaving(false);
   };
 
@@ -215,11 +225,18 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
             onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
             onBlur={(e) => e.target.style.borderColor = "var(--border)"}
           />
-          <button onClick={handleSaveNotes} disabled={saving} style={{
-            marginTop: 6, padding: "6px 16px", borderRadius: 6, border: "none",
-            background: saving ? "var(--bg-tertiary)" : "var(--accent)", color: "#fff",
-            fontSize: 12, fontWeight: 600,
-          }}>{saving ? "Saving..." : "Save"}</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+            <button onClick={handleSaveNotes} disabled={saving} style={{
+              padding: "6px 16px", borderRadius: 6, border: "none",
+              background: saving ? "var(--bg-tertiary)" : "var(--accent)", color: "#fff",
+              fontSize: 12, fontWeight: 600,
+            }}>{saving ? "Saving..." : "Save"}</button>
+            {saveStatus && (
+              <span style={{ fontSize: 11, color: saveStatus === "Saved" ? "var(--success)" : "var(--danger)", fontWeight: 500 }}>
+                {saveStatus}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

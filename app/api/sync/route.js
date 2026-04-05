@@ -64,25 +64,29 @@ async function parseBatch(emailBatch) {
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) return [];
 
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    return parsed.map((t, i) => ({
-      email_id: emailBatch[i]?.id || `txn-${Date.now()}-${i}`,
-      merchant: t.merchant || "Unknown",
-      amount: parseFloat(t.amount) || 0,
-      date: t.date || new Date().toISOString().split("T")[0],
-      category: t.category || "other",
-      has_receipt: Boolean(t.hasReceipt),
-      item_description: t.itemDescription || null,
-      is_refund: Boolean(t.isRefund),
-      notes: t.notes || null,
-      txn_time: t.time || null,
-      raw_email: emailBatch[i]?.subject || "",
-    }));
-  } catch (err) {
-    console.error("Failed to parse Claude response:", err.message);
-    return [];
-  }
+  const parsed = JSON.parse(jsonMatch[0]);
+  return parsed.map((t, i) => ({
+    email_id: emailBatch[i]?.id || `txn-${Date.now()}-${i}`,
+    merchant: t.merchant || "Unknown",
+    amount: parseFloat(t.amount) || 0,
+    date: t.date || new Date().toISOString().split("T")[0],
+    category: t.category || "other",
+    has_receipt: Boolean(t.hasReceipt),
+    item_description: t.itemDescription || null,
+    is_refund: Boolean(t.isRefund),
+    notes: t.notes || null,
+    txn_time: t.time || null,
+    raw_email: emailBatch[i]?.subject || "",
+  }));
+}
+
+function isRateLimitError(err) {
+  return (
+    err?.status === 429 ||
+    err?.error?.type === "rate_limit_error" ||
+    err?.message?.includes("rate_limit") ||
+    err?.message?.includes("Rate limit")
+  );
 }
 
 export async function POST() {
@@ -102,9 +106,7 @@ export async function POST() {
   isSyncing[userId] = true;
 
   try {
-    console.log(`Starting Gmail sync for ${session.user.email}...`);
     const emails = await fetchHDFCEmails();
-    console.log(`Fetched ${emails.length} emails from Gmail`);
 
     if (!emails.length) {
       return NextResponse.json({
@@ -113,17 +115,15 @@ export async function POST() {
       });
     }
 
-    // Get existing email IDs for this user
     const { data: existing, error: fetchError } = await getSupabase()
       .from("transactions")
       .select("email_id")
       .eq("user_id", userId);
 
-    if (fetchError) throw new Error("Supabase: " + fetchError.message);
+    if (fetchError) throw new Error("Database error: " + fetchError.message);
 
     const existingIds = new Set((existing || []).map((e) => e.email_id));
     const newEmails = emails.filter((e) => !existingIds.has(e.id));
-    console.log(`${newEmails.length} new emails to parse (${existingIds.size} already in DB)`);
 
     let totalInserted = 0;
 
@@ -138,22 +138,17 @@ export async function POST() {
         let rows = [];
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            console.log(`Batch ${batchNum}/${totalBatches} (${batch.length} emails) attempt ${attempt}`);
             rows = await parseBatch(batch);
             break;
           } catch (err) {
-            if (err?.status === 429 || String(err).includes("rate_limit")) {
-              const wait = 65000 * attempt;
-              console.log(`Rate limited. Waiting ${wait / 1000}s...`);
-              await sleep(wait);
-            } else {
-              console.error(`Batch ${batchNum} error:`, err.message);
-              break;
+            if (isRateLimitError(err) && attempt < 3) {
+              await sleep(65000 * attempt);
+            } else if (!isRateLimitError(err)) {
+              break; // Non-rate-limit error, skip batch
             }
           }
         }
 
-        // Filter verification transactions and add user_id
         rows = rows
           .filter((r) => r.amount >= 10)
           .map((r) => ({ ...r, user_id: userId }));
@@ -163,22 +158,17 @@ export async function POST() {
             .from("transactions")
             .upsert(rows, { onConflict: "email_id,user_id" });
 
-          if (insertError) {
-            console.error(`Insert error batch ${batchNum}:`, insertError.message);
-          } else {
+          if (!insertError) {
             totalInserted += rows.length;
-            console.log(`Saved ${rows.length} transactions (${totalInserted} total so far)`);
           }
         }
 
         if (i + BATCH_SIZE < newEmails.length) {
-          console.log(`Waiting 65s before next batch...`);
           await sleep(65000);
         }
       }
     }
 
-    // Return this user's transactions
     const { data: allTransactions, error } = await getSupabase()
       .from("transactions")
       .select("*")
@@ -194,7 +184,6 @@ export async function POST() {
         : `No new transactions. ${allTransactions.length} total.`,
     });
   } catch (error) {
-    console.error("Sync error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to sync emails" },
       { status: 500 }
