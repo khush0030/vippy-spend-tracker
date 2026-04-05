@@ -1,28 +1,32 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { fetchHDFCEmails } from "@/lib/gmail";
 import { getSupabase } from "@/lib/supabase";
 import Anthropic from "@anthropic-ai/sdk";
 
-// Simple in-memory lock to prevent parallel syncs
-let isSyncing = false;
+let isSyncing = {};
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `You are a financial data extraction assistant. Parse bank transaction alert emails, Amazon order emails, and Amazon return/refund emails into structured transaction data.
+const SYSTEM_PROMPT = `You are a financial data extraction assistant for a corporate expense tracker. Parse bank transaction alert emails, Amazon order emails, and return/refund emails into structured transaction data.
 
 For each email, extract:
-- merchant: the merchant/vendor name
+- merchant: the merchant/vendor name (clean it up — e.g. "AMAZONIN" → "Amazon", "SWIGGY" → "Swiggy")
 - amount: numeric amount in INR (just the number, no currency symbol)
 - date: ISO date string (YYYY-MM-DD)
 - category: one of: amazon, fuel, dining, swiggy, utilities, subscriptions, office, travel, other
 - hasReceipt: true if it's an Amazon order (they include GST invoices), false otherwise
-- itemDescription: for Amazon orders/returns, extract the item name/description if available. For other transactions, leave as null.
+- itemDescription: for Amazon orders/returns, extract the specific item name. For other transactions, leave null.
 - isRefund: true if this is a return, refund, reversal, or cashback credit. false for normal purchases.
+- notes: A brief 1-line AI-generated insight about this transaction. Examples: "Monthly Google Workspace subscription", "Fuel fill-up at highway station", "Swiggy dinner order - late night", "Amazon return processed - refund to card". Be specific and useful.
+- time: Extract the time of transaction if available in the email (HH:MM format, 24hr). null if not found.
 
 IMPORTANT rules:
 - If an email is about an Amazon return, refund, or cancellation → set isRefund: true
 - If an HDFC email mentions "refund", "reversal", "credit", or "cashback" → set isRefund: true
 - Verification transactions (typically Rs.1 or Rs.2) should be skipped entirely.
+- Clean up merchant names to be human-readable.
 - If an email doesn't contain a valid transaction, skip it.
 
 Category rules:
@@ -36,7 +40,7 @@ Category rules:
 - Airlines, hotels, trains, Uber, Ola, cabs → "travel"
 - Everything else → "other"
 
-Return ONLY a valid JSON array. Each object must have: merchant, amount, date, category, hasReceipt, itemDescription, isRefund.`;
+Return ONLY a valid JSON array. Each object must have: merchant, amount, date, category, hasReceipt, itemDescription, isRefund, notes, time.`;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -71,6 +75,8 @@ async function parseBatch(emailBatch) {
       has_receipt: Boolean(t.hasReceipt),
       item_description: t.itemDescription || null,
       is_refund: Boolean(t.isRefund),
+      notes: t.notes || null,
+      txn_time: t.time || null,
       raw_email: emailBatch[i]?.subject || "",
     }));
   } catch (err) {
@@ -80,16 +86,23 @@ async function parseBatch(emailBatch) {
 }
 
 export async function POST() {
-  if (isSyncing) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+
+  if (isSyncing[userId]) {
     return NextResponse.json({
       error: "Sync already in progress. Please wait for it to finish.",
     }, { status: 409 });
   }
 
-  isSyncing = true;
+  isSyncing[userId] = true;
 
   try {
-    console.log("Starting Gmail sync...");
+    console.log(`Starting Gmail sync for ${session.user.email}...`);
     const emails = await fetchHDFCEmails();
     console.log(`Fetched ${emails.length} emails from Gmail`);
 
@@ -100,10 +113,11 @@ export async function POST() {
       });
     }
 
-    // Get existing email IDs to skip duplicates
+    // Get existing email IDs for this user
     const { data: existing, error: fetchError } = await getSupabase()
       .from("transactions")
-      .select("email_id");
+      .select("email_id")
+      .eq("user_id", userId);
 
     if (fetchError) throw new Error("Supabase: " + fetchError.message);
 
@@ -114,7 +128,6 @@ export async function POST() {
     let totalInserted = 0;
 
     if (newEmails.length > 0) {
-      // Process in small batches, save each batch immediately
       const BATCH_SIZE = 5;
       const totalBatches = Math.ceil(newEmails.length / BATCH_SIZE);
 
@@ -122,7 +135,6 @@ export async function POST() {
         const batch = newEmails.slice(i, i + BATCH_SIZE);
         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
 
-        // Parse with retry
         let rows = [];
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
@@ -141,14 +153,15 @@ export async function POST() {
           }
         }
 
-        // Filter out verification transactions (under Rs.10)
-        rows = rows.filter((r) => r.amount >= 10);
+        // Filter verification transactions and add user_id
+        rows = rows
+          .filter((r) => r.amount >= 10)
+          .map((r) => ({ ...r, user_id: userId }));
 
-        // Save this batch to Supabase immediately
         if (rows.length > 0) {
           const { error: insertError } = await getSupabase()
             .from("transactions")
-            .upsert(rows, { onConflict: "email_id" });
+            .upsert(rows, { onConflict: "email_id,user_id" });
 
           if (insertError) {
             console.error(`Insert error batch ${batchNum}:`, insertError.message);
@@ -158,7 +171,6 @@ export async function POST() {
           }
         }
 
-        // Wait 65s between batches to stay within rate limits
         if (i + BATCH_SIZE < newEmails.length) {
           console.log(`Waiting 65s before next batch...`);
           await sleep(65000);
@@ -166,10 +178,11 @@ export async function POST() {
       }
     }
 
-    // Return all transactions
+    // Return this user's transactions
     const { data: allTransactions, error } = await getSupabase()
       .from("transactions")
       .select("*")
+      .eq("user_id", userId)
       .order("date", { ascending: false });
 
     if (error) throw error;
@@ -187,6 +200,6 @@ export async function POST() {
       { status: 500 }
     );
   } finally {
-    isSyncing = false;
+    isSyncing[userId] = false;
   }
 }

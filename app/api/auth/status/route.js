@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 export async function GET() {
-  const hasRefreshToken =
-    !!process.env.GOOGLE_REFRESH_TOKEN &&
-    process.env.GOOGLE_REFRESH_TOKEN !== "your_google_refresh_token_here";
+  const session = await getServerSession(authOptions);
 
-  return NextResponse.json({ connected: hasRefreshToken });
+  return NextResponse.json({
+    connected: !!session,
+    user: session?.user || null,
+  });
 }

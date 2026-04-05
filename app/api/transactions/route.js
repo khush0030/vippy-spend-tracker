@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 
-// GET — load all transactions
 export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { data, error } = await getSupabase()
       .from("transactions")
       .select("*")
+      .eq("user_id", session.user.id)
       .order("date", { ascending: false });
 
     if (error) throw error;
@@ -21,15 +28,20 @@ export async function GET() {
   }
 }
 
-// PATCH — toggle receipt status
 export async function PATCH(request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { id, hasReceipt } = await request.json();
 
     const { error } = await getSupabase()
       .from("transactions")
       .update({ has_receipt: hasReceipt })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", session.user.id);
 
     if (error) throw error;
 
