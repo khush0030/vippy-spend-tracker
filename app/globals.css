@@ -30,6 +30,7 @@
   --warning: #c68a00;
   --warning-bg: #fef7e0;
   --icon-bg-opacity: 15;
+  --shadow-lg: 0 6px 20px rgba(0,0,0,0.1);
 }
 
 [data-theme="dark"] {
@@ -54,6 +55,7 @@
   --warning: #f0c040;
   --warning-bg: #2e2a1a;
   --icon-bg-opacity: 25;
+  --shadow-lg: 0 6px 20px rgba(0,0,0,0.35);
 }
 
 html {
@@ -63,6 +65,7 @@ html {
   font-size: 15px;
   line-height: 1.5;
   transition: background 0.2s, color 0.2s;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -104,4 +107,33 @@ input, select, textarea {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes gentleBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+button:active {
+  transform: scale(0.97);
 }

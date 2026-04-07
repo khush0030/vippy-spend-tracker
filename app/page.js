@@ -57,7 +57,10 @@ function useTheme() {
 // ── User Menu ──
 function UserMenu({ session, theme, onToggleTheme, isMobile }) {
   const [open, setOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(session?.user?.image || null);
+  const [uploading, setUploading] = useState(false);
   const ref = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -65,17 +68,43 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
+  const handleAvatarUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const res = await fetch("/api/avatar", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.avatar_url) setAvatarUrl(data.avatar_url);
+      else if (data.error) console.error("Avatar upload failed:", data.error);
+    } catch (err) {
+      console.error("Avatar upload failed:", err);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, []);
+
   const user = session?.user;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        style={{ display: "none" }}
+        onChange={handleAvatarUpload}
+      />
       <button onClick={() => setOpen(!open)} style={{
         display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px",
         borderRadius: "var(--radius)", border: "1px solid var(--border)",
         background: "var(--bg-card)", cursor: "pointer",
       }}>
-        {user?.image ? (
-          <img src={user.image} alt="" style={{ width: 28, height: 28, borderRadius: "50%" }} referrerPolicy="no-referrer" />
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} referrerPolicy="no-referrer" />
         ) : (
           <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600 }}>
             {user?.name?.[0]?.toUpperCase() || "?"}
@@ -93,17 +122,28 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
           background: "var(--bg-card)", border: "1px solid var(--border)",
           borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-hover)",
           zIndex: 100, overflow: "hidden",
+          animation: "scaleIn 0.15s ease", transformOrigin: "top right",
         }}>
           {/* Profile section */}
           <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--border)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {user?.image ? (
-                <img src={user.image} alt="" style={{ width: 40, height: 40, borderRadius: "50%" }} referrerPolicy="no-referrer" />
-              ) : (
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 600 }}>
-                  {user?.name?.[0]?.toUpperCase() || "?"}
+              <div style={{ position: "relative", cursor: "pointer" }} onClick={() => fileInputRef.current?.click()}>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} referrerPolicy="no-referrer" />
+                ) : (
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 600 }}>
+                    {user?.name?.[0]?.toUpperCase() || "?"}
+                  </div>
+                )}
+                <div style={{
+                  position: "absolute", bottom: -2, right: -2, width: 18, height: 18,
+                  borderRadius: "50%", background: "var(--accent)", color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, border: "2px solid var(--bg-card)",
+                }}>
+                  {uploading ? "..." : "\u270F"}
                 </div>
-              )}
+              </div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{user?.name || "User"}</div>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{user?.email}</div>
@@ -113,6 +153,18 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
 
           {/* Menu items */}
           <div style={{ padding: "6px" }}>
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 12px", borderRadius: 6, border: "none",
+              background: "transparent", color: "var(--text)", fontSize: 13,
+              textAlign: "left", opacity: uploading ? 0.5 : 1,
+            }}
+              onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
+              onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+            >
+              <span style={{ fontSize: 15 }}>{"\uD83D\uDCF7"}</span>
+              {uploading ? "Uploading..." : "Change avatar"}
+            </button>
             <button onClick={onToggleTheme} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 10,
               padding: "8px 12px", borderRadius: 6, border: "none",
@@ -177,11 +229,13 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)",
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
+      animation: "fadeIn 0.15s ease",
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: "var(--bg-card)", borderRadius: "var(--radius-lg)", padding: "28px 24px",
         maxWidth: 460, width: "100%", position: "relative", boxShadow: "var(--shadow-hover)",
         maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border)",
+        animation: "scaleIn 0.2s ease",
       }}>
         <button onClick={onClose} aria-label="Close" style={{
           position: "absolute", top: 14, right: 14, border: "none",
@@ -302,8 +356,13 @@ function Card({ title, value, sub, accent, isMobile }) {
       background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)",
       padding: isMobile ? "14px 16px" : "18px 22px", flex: isMobile ? "1 1 calc(50% - 6px)" : "1 1 170px",
       minWidth: isMobile ? 0 : 150, boxShadow: "var(--shadow)",
-      borderLeft: accent ? `3px solid ${accent}` : "none",
-    }}>
+      borderLeft: accent ? "3px solid transparent" : "none",
+      borderImage: accent ? `linear-gradient(180deg, ${accent}, ${accent}55) 1` : "none",
+      transition: "transform 0.2s ease, box-shadow 0.2s ease",
+    }}
+      onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}
+      onMouseOut={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "var(--shadow)"; }}
+    >
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>{title}</div>
       <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 3 }}>{sub}</div>}
@@ -345,7 +404,10 @@ function InsightsPanel({ transactions, isMobile }) {
       <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, color: "var(--text)" }}>Spending Insights</h3>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 10 }}>
         {items.map((it) => (
-          <div key={it.title} style={{ padding: "12px 14px", borderRadius: "var(--radius)", background: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+          <div key={it.title} style={{ padding: "12px 14px", borderRadius: "var(--radius)", background: "var(--bg-secondary)", border: "1px solid var(--border)", transition: "transform 0.2s ease, box-shadow 0.2s ease", cursor: "default" }}
+            onMouseOver={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "var(--shadow-hover)"; }}
+            onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
               <span style={{ fontSize: 14 }}>{it.icon}</span>
               <span style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>{it.title}</span>
@@ -424,19 +486,34 @@ function TransactionsTab({ transactions, onToggleReceipt, onSelect, isMobile }) 
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <input type="text" placeholder="Search merchant..." value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ ...inputStyle, width: isMobile ? "100%" : 220 }}
-          onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
-          onBlur={(e) => e.target.style.borderColor = "var(--border)"}
-        />
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}
-          style={{ ...inputStyle, flex: isMobile ? 1 : "0 0 auto" }}>
-          <option value="all">All Categories</option>
-          {Object.entries(CATEGORIES).map(([k, { label }]) => <option key={k} value={k}>{label}</option>)}
-        </select>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ position: "relative", width: isMobile ? "100%" : 220 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" placeholder="Search merchant..." value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ ...inputStyle, width: "100%", paddingLeft: 32 }}
+            onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
+            onBlur={(e) => e.target.style.borderColor = "var(--border)"}
+          />
+        </div>
         <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{filtered.length} results</span>
+      </div>
+      <div style={{ display: "flex", gap: 4, marginBottom: 14, overflowX: "auto", paddingBottom: 2 }}>
+        {[{ key: "all", label: "All", icon: null, color: null }, ...Object.entries(CATEGORIES).map(([k, v]) => ({ key: k, label: v.label, icon: v.icon, color: v.color }))].map((cat) => (
+          <button key={cat.key} onClick={() => setFilter(cat.key)} style={{
+            padding: "5px 12px", borderRadius: 20, border: "1px solid",
+            borderColor: filter === cat.key ? (cat.color || "var(--accent)") : "var(--border)",
+            background: filter === cat.key ? ((cat.color || "var(--accent)") + "18") : "var(--bg-card)",
+            color: filter === cat.key ? (cat.color || "var(--accent)") : "var(--text-secondary)",
+            fontSize: 11, fontWeight: 500, whiteSpace: "nowrap",
+            transition: "all 0.15s ease", flexShrink: 0,
+          }}>
+            {cat.icon && <span style={{ marginRight: 4 }}>{cat.icon}</span>}
+            {cat.label}
+          </button>
+        ))}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -447,10 +524,11 @@ function TransactionsTab({ transactions, onToggleReceipt, onSelect, isMobile }) 
               display: "flex", alignItems: "center", gap: isMobile ? 10 : 12,
               padding: isMobile ? "10px 12px" : "10px 16px",
               background: "var(--bg-card)", borderRadius: "var(--radius)",
-              cursor: "pointer", transition: "background 0.1s",
+              cursor: "pointer", borderLeft: "3px solid transparent",
+              transition: "background 0.15s ease, border-color 0.15s ease, transform 0.15s ease",
             }}
-              onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
-              onMouseOut={(e) => e.currentTarget.style.background = "var(--bg-card)"}
+              onMouseOver={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.borderLeftColor = cat.color; e.currentTarget.style.transform = "translateX(2px)"; }}
+              onMouseOut={(e) => { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.borderLeftColor = "transparent"; e.currentTarget.style.transform = "translateX(0)"; }}
             >
               <div style={{
                 width: 34, height: 34, borderRadius: 8, background: cat.color + "22",
@@ -484,7 +562,7 @@ function TransactionsTab({ transactions, onToggleReceipt, onSelect, isMobile }) 
             </div>
           );
         })}
-        {filtered.length === 0 && <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--text-tertiary)" }}><div style={{ fontSize: 32, marginBottom: 8, opacity: 0.3 }}>{"\uD83D\uDD0D"}</div><div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4, color: "var(--text-secondary)" }}>No transactions found</div><div style={{ fontSize: 12 }}>Try a different search term or category filter.</div></div>}
+        {filtered.length === 0 && <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--text-tertiary)" }}><div style={{ fontSize: 32, marginBottom: 8, opacity: 0.3, animation: "gentleBounce 2.5s ease-in-out infinite" }}>{"\uD83D\uDD0D"}</div><div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4, color: "var(--text-secondary)" }}>No transactions found</div><div style={{ fontSize: 12 }}>Try a different search term or category filter.</div></div>}
       </div>
     </div>
   );
@@ -669,8 +747,18 @@ export default function Home() {
   const [endDate, setEndDate] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
   const isMobile = useIsMobile();
+  const tabContainerRef = useRef(null);
+  const [underline, setUnderline] = useState({ left: 0, width: 0 });
 
   useEffect(() => { if (status === "unauthenticated") router.push("/login"); }, [status, router]);
+
+  useEffect(() => {
+    if (!tabContainerRef.current) return;
+    const activeBtn = tabContainerRef.current.querySelector(`[data-tab="${activeTab}"]`);
+    if (activeBtn) {
+      setUnderline({ left: activeBtn.offsetLeft, width: activeBtn.offsetWidth });
+    }
+  }, [activeTab]);
 
   const transactions = useMemo(() => allTransactions.filter((t) => {
     if (t.amount < 10) return false;
@@ -704,15 +792,21 @@ export default function Home() {
     }
   }, [status, loadTransactions]);
 
+  const pollRef = useRef(null);
   const handleSync = useCallback(async () => {
     setSyncing(true);
     setMessage("Syncing...");
     fetch("/api/sync", { method: "POST" })
       .then((r) => r.json())
-      .then((d) => { if (d.error && !d.error.includes("already")) setMessage("Error: " + d.error); else { setMessage(d.message || "Done!"); loadTransactions(); } setSyncing(false); })
+      .then((d) => {
+        if (d.error && !d.error.includes("already")) setMessage("Error: " + d.error);
+        else { setMessage(d.message || "Done!"); loadTransactions(); }
+        setSyncing(false);
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      })
       .catch((e) => { setMessage("Failed: " + e.message); setSyncing(false); });
-    const poll = setInterval(() => loadTransactions(), 30000);
-    setTimeout(() => clearInterval(poll), 40 * 60 * 1000);
+    pollRef.current = setInterval(() => loadTransactions(), 60000);
+    setTimeout(() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, 5 * 60 * 1000);
   }, [loadTransactions]);
 
   const handleToggleReceipt = useCallback((id) => {
@@ -738,7 +832,7 @@ export default function Home() {
   return (
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: isMobile ? "14px 12px" : "24px 24px" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 16 : 22, flexWrap: "wrap", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 16 : 22, flexWrap: "wrap", gap: 10, paddingBottom: isMobile ? 14 : 20, borderBottom: "1px solid var(--border)" }}>
         <div>
           <h1 style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: "var(--text)", letterSpacing: -0.3 }}>Vippy Spend Tracker</h1>
           <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 1 }}>HDFC Corporate Card &middot; Vippy Industries</p>
@@ -753,19 +847,19 @@ export default function Home() {
           }}
             onMouseOver={(e) => { if (!syncing) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-hover)"; } }}
             onMouseOut={(e) => { e.currentTarget.style.background = syncing ? "var(--bg-tertiary)" : "var(--bg-card)"; e.currentTarget.style.boxShadow = "var(--shadow)"; }}
-          >{syncing ? "Syncing..." : "Sync Gmail"}</button>
+          >{syncing ? (<><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", animation: "pulse 1.2s ease-in-out infinite", marginRight: 6, verticalAlign: "middle" }} />Syncing...</>) : "Sync Gmail"}</button>
           <UserMenu session={session} theme={theme} onToggleTheme={toggleTheme} isMobile={isMobile} />
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", marginBottom: isMobile ? 14 : 18, overflowX: "auto" }}>
+      <div ref={tabContainerRef} style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", marginBottom: isMobile ? 14 : 18, overflowX: "auto", position: "relative" }}>
         {tabs.map((tab) => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+          <button key={tab.key} data-tab={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: isMobile ? "8px 14px" : "8px 20px", border: "none", background: "none",
             fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 400,
             color: activeTab === tab.key ? "var(--text)" : "var(--text-tertiary)",
-            borderBottom: activeTab === tab.key ? "2px solid var(--text)" : "2px solid transparent",
+            borderBottom: "2px solid transparent",
             marginBottom: -1, whiteSpace: "nowrap", transition: "color 0.15s, background 0.15s",
             borderRadius: "4px 4px 0 0",
           }}
@@ -773,12 +867,18 @@ export default function Home() {
             onMouseOut={(e) => { e.currentTarget.style.color = activeTab === tab.key ? "var(--text)" : "var(--text-tertiary)"; e.currentTarget.style.background = "none"; }}
           >{tab.label}</button>
         ))}
+        <div style={{
+          position: "absolute", bottom: 0, height: 2,
+          background: "var(--text)", borderRadius: 1,
+          left: underline.left, width: underline.width,
+          transition: "left 0.25s ease, width 0.25s ease",
+        }} />
       </div>
 
       {/* Content */}
       {allTransactions.length === 0 && !syncing && !message ? (
         <div style={{ textAlign: "center", padding: isMobile ? "60px 16px" : "80px 20px" }}>
-          <div style={{ fontSize: 40, marginBottom: 14, opacity: 0.2 }}>{"\uD83D\uDCCA"}</div>
+          <div style={{ fontSize: 40, marginBottom: 14, opacity: 0.3, animation: "gentleBounce 2.5s ease-in-out infinite" }}>{"\uD83D\uDCCA"}</div>
           <h2 style={{ fontSize: 17, fontWeight: 600, marginBottom: 8, color: "var(--text)" }}>No transactions yet</h2>
           <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 20 }}>Click Sync Gmail to fetch your expenses.</p>
           <button onClick={handleSync} style={{
@@ -800,14 +900,18 @@ export default function Home() {
             onPreset={handlePreset} isMobile={isMobile} />
 
           {transactions.length === 0 && allTransactions.length > 0 ? (
-            <div style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>No transactions in this date range.</div>
+            <div style={{ textAlign: "center", padding: 48 }}>
+              <div style={{ fontSize: 32, marginBottom: 10, opacity: 0.3, animation: "gentleBounce 2.5s ease-in-out infinite" }}>{"\uD83D\uDCC5"}</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 4 }}>No transactions in this range</div>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Try adjusting the date period above.</div>
+            </div>
           ) : (
-            <>
+            <div key={activeTab} style={{ animation: "slideUp 0.2s ease" }}>
               {activeTab === "overview" && <OverviewTab transactions={transactions} isMobile={isMobile} chartColors={chartColors} />}
               {activeTab === "transactions" && <TransactionsTab transactions={transactions} onToggleReceipt={handleToggleReceipt} onSelect={setSelectedTxn} isMobile={isMobile} />}
               {activeTab === "receipts" && <ReceiptsTab transactions={transactions} onToggleReceipt={handleToggleReceipt} isMobile={isMobile} />}
               {activeTab === "reports" && <ReportsTab transactions={transactions} startDate={startDate} endDate={endDate} isMobile={isMobile} />}
-            </>
+            </div>
           )}
         </>
       )}

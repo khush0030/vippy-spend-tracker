@@ -106,12 +106,25 @@ export async function POST() {
   isSyncing[userId] = true;
 
   try {
-    const emails = await fetchHDFCEmails();
+    // Get last sync time for incremental sync (gracefully handle if column doesn't exist)
+    let lastSyncedAt = null;
+    try {
+      const { data: userData } = await getSupabase()
+        .from("users")
+        .select("last_synced_at")
+        .eq("id", userId)
+        .single();
+      lastSyncedAt = userData?.last_synced_at || null;
+    } catch {
+      // Column may not exist yet — fall back to full sync
+    }
+
+    const emails = await fetchHDFCEmails(lastSyncedAt);
 
     if (!emails.length) {
       return NextResponse.json({
         transactions: [],
-        message: "No transaction emails found.",
+        message: "No new transaction emails found.",
       });
     }
 
@@ -126,14 +139,13 @@ export async function POST() {
     const newEmails = emails.filter((e) => !existingIds.has(e.id));
 
     let totalInserted = 0;
+    const insertedEmailIds = [];
 
     if (newEmails.length > 0) {
-      const BATCH_SIZE = 5;
-      const totalBatches = Math.ceil(newEmails.length / BATCH_SIZE);
+      const BATCH_SIZE = 15;
 
       for (let i = 0; i < newEmails.length; i += BATCH_SIZE) {
         const batch = newEmails.slice(i, i + BATCH_SIZE);
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
 
         let rows = [];
         for (let attempt = 1; attempt <= 3; attempt++) {
@@ -142,9 +154,9 @@ export async function POST() {
             break;
           } catch (err) {
             if (isRateLimitError(err) && attempt < 3) {
-              await sleep(65000 * attempt);
+              await sleep(10000 * attempt);
             } else if (!isRateLimitError(err)) {
-              break; // Non-rate-limit error, skip batch
+              break;
             }
           }
         }
@@ -160,13 +172,24 @@ export async function POST() {
 
           if (!insertError) {
             totalInserted += rows.length;
+            insertedEmailIds.push(...rows.map((r) => r.email_id));
           }
         }
 
         if (i + BATCH_SIZE < newEmails.length) {
-          await sleep(65000);
+          await sleep(3000);
         }
       }
+    }
+
+    // Update last_synced_at timestamp (ignore if column doesn't exist)
+    try {
+      await getSupabase()
+        .from("users")
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq("id", userId);
+    } catch {
+      // Column may not exist yet
     }
 
     const { data: allTransactions, error } = await getSupabase()
