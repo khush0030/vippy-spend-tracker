@@ -106,14 +106,18 @@ export async function POST() {
   isSyncing[userId] = true;
 
   try {
-    // Get last sync time for incremental sync
-    const { data: userData } = await getSupabase()
-      .from("users")
-      .select("last_synced_at")
-      .eq("id", userId)
-      .single();
-
-    const lastSyncedAt = userData?.last_synced_at || null;
+    // Get last sync time for incremental sync (gracefully handle if column doesn't exist)
+    let lastSyncedAt = null;
+    try {
+      const { data: userData } = await getSupabase()
+        .from("users")
+        .select("last_synced_at")
+        .eq("id", userId)
+        .single();
+      lastSyncedAt = userData?.last_synced_at || null;
+    } catch {
+      // Column may not exist yet — fall back to full sync
+    }
 
     const emails = await fetchHDFCEmails(lastSyncedAt);
 
@@ -178,11 +182,15 @@ export async function POST() {
       }
     }
 
-    // Update last_synced_at timestamp
-    await getSupabase()
-      .from("users")
-      .update({ last_synced_at: new Date().toISOString() })
-      .eq("id", userId);
+    // Update last_synced_at timestamp (ignore if column doesn't exist)
+    try {
+      await getSupabase()
+        .from("users")
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq("id", userId);
+    } catch {
+      // Column may not exist yet
+    }
 
     const { data: allTransactions, error } = await getSupabase()
       .from("transactions")
