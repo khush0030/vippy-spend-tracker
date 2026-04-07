@@ -57,7 +57,10 @@ function useTheme() {
 // ── User Menu ──
 function UserMenu({ session, theme, onToggleTheme, isMobile }) {
   const [open, setOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(session?.user?.image || null);
+  const [uploading, setUploading] = useState(false);
   const ref = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -65,17 +68,43 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
+  const handleAvatarUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const res = await fetch("/api/avatar", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.avatar_url) setAvatarUrl(data.avatar_url);
+      else if (data.error) console.error("Avatar upload failed:", data.error);
+    } catch (err) {
+      console.error("Avatar upload failed:", err);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, []);
+
   const user = session?.user;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        style={{ display: "none" }}
+        onChange={handleAvatarUpload}
+      />
       <button onClick={() => setOpen(!open)} style={{
         display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px",
         borderRadius: "var(--radius)", border: "1px solid var(--border)",
         background: "var(--bg-card)", cursor: "pointer",
       }}>
-        {user?.image ? (
-          <img src={user.image} alt="" style={{ width: 28, height: 28, borderRadius: "50%" }} referrerPolicy="no-referrer" />
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} referrerPolicy="no-referrer" />
         ) : (
           <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600 }}>
             {user?.name?.[0]?.toUpperCase() || "?"}
@@ -97,13 +126,23 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
           {/* Profile section */}
           <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--border)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {user?.image ? (
-                <img src={user.image} alt="" style={{ width: 40, height: 40, borderRadius: "50%" }} referrerPolicy="no-referrer" />
-              ) : (
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 600 }}>
-                  {user?.name?.[0]?.toUpperCase() || "?"}
+              <div style={{ position: "relative", cursor: "pointer" }} onClick={() => fileInputRef.current?.click()}>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} referrerPolicy="no-referrer" />
+                ) : (
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 600 }}>
+                    {user?.name?.[0]?.toUpperCase() || "?"}
+                  </div>
+                )}
+                <div style={{
+                  position: "absolute", bottom: -2, right: -2, width: 18, height: 18,
+                  borderRadius: "50%", background: "var(--accent)", color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, border: "2px solid var(--bg-card)",
+                }}>
+                  {uploading ? "..." : "\u270F"}
                 </div>
-              )}
+              </div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{user?.name || "User"}</div>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{user?.email}</div>
@@ -113,6 +152,18 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
 
           {/* Menu items */}
           <div style={{ padding: "6px" }}>
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 12px", borderRadius: 6, border: "none",
+              background: "transparent", color: "var(--text)", fontSize: 13,
+              textAlign: "left", opacity: uploading ? 0.5 : 1,
+            }}
+              onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-hover)"}
+              onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+            >
+              <span style={{ fontSize: 15 }}>{"\uD83D\uDCF7"}</span>
+              {uploading ? "Uploading..." : "Change avatar"}
+            </button>
             <button onClick={onToggleTheme} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 10,
               padding: "8px 12px", borderRadius: 6, border: "none",
@@ -704,15 +755,21 @@ export default function Home() {
     }
   }, [status, loadTransactions]);
 
+  const pollRef = useRef(null);
   const handleSync = useCallback(async () => {
     setSyncing(true);
     setMessage("Syncing...");
     fetch("/api/sync", { method: "POST" })
       .then((r) => r.json())
-      .then((d) => { if (d.error && !d.error.includes("already")) setMessage("Error: " + d.error); else { setMessage(d.message || "Done!"); loadTransactions(); } setSyncing(false); })
+      .then((d) => {
+        if (d.error && !d.error.includes("already")) setMessage("Error: " + d.error);
+        else { setMessage(d.message || "Done!"); loadTransactions(); }
+        setSyncing(false);
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      })
       .catch((e) => { setMessage("Failed: " + e.message); setSyncing(false); });
-    const poll = setInterval(() => loadTransactions(), 30000);
-    setTimeout(() => clearInterval(poll), 40 * 60 * 1000);
+    pollRef.current = setInterval(() => loadTransactions(), 60000);
+    setTimeout(() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, 5 * 60 * 1000);
   }, [loadTransactions]);
 
   const handleToggleReceipt = useCallback((id) => {
