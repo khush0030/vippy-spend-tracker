@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from "chart.js";
@@ -743,6 +744,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("overview");
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("");
+  const [gmailStatus, setGmailStatus] = useState(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
@@ -789,6 +791,10 @@ export default function Home() {
     if (status === "authenticated") {
       fetch("/api/transactions/claim", { method: "POST" })
         .then(() => loadTransactions()).catch(() => loadTransactions());
+      fetch("/api/gmail/status")
+        .then((r) => r.json())
+        .then(setGmailStatus)
+        .catch(() => setGmailStatus({ connected: false, reason: "fetch_failed", detail: "Could not reach status endpoint" }));
     }
   }, [status, loadTransactions]);
 
@@ -833,12 +839,40 @@ export default function Home() {
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: isMobile ? "14px 12px" : "24px 24px" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 16 : 22, flexWrap: "wrap", gap: 10, paddingBottom: isMobile ? 14 : 20, borderBottom: "1px solid var(--border)" }}>
-        <div>
-          <h1 style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: "var(--text)", letterSpacing: -0.3 }}>Vippy Spend Tracker</h1>
-          <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 1 }}>HDFC Corporate Card &middot; Vippy Industries</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Image
+            src="/vippy-logo.webp"
+            alt="Vippy"
+            width={isMobile ? 32 : 38}
+            height={isMobile ? 32 : 38}
+            priority
+            style={{ borderRadius: 8, objectFit: "contain" }}
+          />
+          <div>
+            <h1 style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: "var(--text)", letterSpacing: -0.3 }}>Vippy Spend Tracker</h1>
+            <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 1 }}>HDFC Corporate Card &middot; Vippy Industries</p>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {message && <span style={{ fontSize: 11, color: message.startsWith("Error") ? "var(--danger)" : "var(--success)", maxWidth: 160 }}>{message}</span>}
+          {gmailStatus && (
+            <span
+              title={gmailStatus.connected
+                ? `Connected as ${gmailStatus.email} (${gmailStatus.totalMessages?.toLocaleString() ?? "?"} messages)`
+                : `Gmail disconnected — ${gmailStatus.reason}: ${gmailStatus.detail}`}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                fontSize: 11, color: gmailStatus.connected ? "var(--success)" : "var(--danger)",
+                cursor: "help",
+              }}
+            >
+              <span style={{
+                width: 7, height: 7, borderRadius: "50%",
+                background: gmailStatus.connected ? "var(--success)" : "var(--danger)",
+              }} />
+              {gmailStatus.connected ? "Gmail connected" : "Gmail disconnected"}
+            </span>
+          )}
           <button onClick={handleSync} disabled={syncing} style={{
             padding: "7px 16px", borderRadius: "var(--radius)", border: "1px solid var(--border)",
             background: syncing ? "var(--bg-tertiary)" : "var(--bg-card)", color: syncing ? "var(--text-tertiary)" : "var(--text)",

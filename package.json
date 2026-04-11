@@ -10,6 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@supabase/supabase-js": "^2.101.1",
+    "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
     "googleapis": "^171.4.0",
     "next": "16.2.2",
