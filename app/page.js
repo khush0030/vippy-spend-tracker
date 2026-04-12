@@ -22,7 +22,21 @@ const CATEGORIES = {
 };
 
 const fmt = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
-const fmtDate = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const fmtDate = (d) => {
+  const dt = new Date(d + "T00:00:00");
+  const day = DAYS_SHORT[dt.getDay()];
+  const rest = dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return `${day}, ${rest}`;
+};
+const fmtTime = (t) => {
+  if (!t) return null;
+  const [h, m] = t.split(":");
+  const hr = parseInt(h, 10);
+  const suffix = hr >= 12 ? "PM" : "AM";
+  const h12 = hr % 12 || 12;
+  return `${h12}:${m} ${suffix}`;
+};
 
 // ── Hooks ──
 function useIsMobile() {
@@ -34,9 +48,10 @@ function useIsMobile() {
 function useTheme() {
   const [theme, setTheme] = useState("light");
   useEffect(() => {
-    const saved = localStorage.getItem("vippy-theme") || "light";
-    setTheme(saved);
-    document.documentElement.setAttribute("data-theme", saved);
+    const saved = localStorage.getItem("vippy-theme");
+    const preferred = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    setTheme(preferred);
+    document.documentElement.setAttribute("data-theme", preferred);
   }, []);
   const toggle = useCallback(() => {
     const next = theme === "light" ? "dark" : "light";
@@ -99,7 +114,7 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
         style={{ display: "none" }}
         onChange={handleAvatarUpload}
       />
-      <button onClick={() => setOpen(!open)} style={{
+      <button onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="true" onKeyDown={(e) => { if (e.key === "Escape" && open) { setOpen(false); e.stopPropagation(); } }} style={{
         display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px",
         borderRadius: "var(--radius)", border: "1px solid var(--border)",
         background: "var(--bg-card)", cursor: "pointer",
@@ -153,8 +168,8 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
           </div>
 
           {/* Menu items */}
-          <div style={{ padding: "6px" }}>
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{
+          <div role="menu" onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }} style={{ padding: "6px" }}>
+            <button role="menuitem" onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 10,
               padding: "8px 12px", borderRadius: 6, border: "none",
               background: "transparent", color: "var(--text)", fontSize: 13,
@@ -166,7 +181,7 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
               <span style={{ fontSize: 15 }}>{"\uD83D\uDCF7"}</span>
               {uploading ? "Uploading..." : "Change avatar"}
             </button>
-            <button onClick={onToggleTheme} style={{
+            <button role="menuitem" onClick={onToggleTheme} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 10,
               padding: "8px 12px", borderRadius: 6, border: "none",
               background: "transparent", color: "var(--text)", fontSize: 13,
@@ -178,7 +193,7 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
               <span style={{ fontSize: 15 }}>{theme === "light" ? "\uD83C\uDF19" : "\u2600\uFE0F"}</span>
               {theme === "light" ? "Dark mode" : "Light mode"}
             </button>
-            <button onClick={() => signOut({ callbackUrl: "/login" })} style={{
+            <button role="menuitem" onClick={() => signOut({ callbackUrl: "/login" })} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 10,
               padding: "8px 12px", borderRadius: 6, border: "none",
               background: "transparent", color: "var(--danger)", fontSize: 13,
@@ -202,8 +217,10 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
   const [userNotes, setUserNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  const modalRef = useRef(null);
 
   useEffect(() => { if (t) setUserNotes(t.userNotes || ""); }, [t]);
+  useEffect(() => { if (t) modalRef.current?.focus(); }, [t]);
   if (!t) return null;
   const cat = CATEGORIES[t.category] || CATEGORIES.other;
 
@@ -226,16 +243,16 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={onClose} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)",
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
       animation: "fadeIn 0.15s ease",
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="modal-title" tabIndex={-1} onClick={(e) => e.stopPropagation()} style={{
         background: "var(--bg-card)", borderRadius: "var(--radius-lg)", padding: "28px 24px",
         maxWidth: 460, width: "100%", position: "relative", boxShadow: "var(--shadow-hover)",
         maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border)",
-        animation: "scaleIn 0.2s ease",
+        animation: "scaleIn 0.2s ease", outline: "none",
       }}>
         <button onClick={onClose} aria-label="Close" style={{
           position: "absolute", top: 14, right: 14, border: "none",
@@ -253,7 +270,7 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
           }}>{cat.icon}</div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 17, color: "var(--text)" }}>{t.merchant}</div>
+            <div id="modal-title" style={{ fontWeight: 600, fontSize: 17, color: "var(--text)" }}>{t.merchant}</div>
             <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: cat.color + "22", color: cat.color }}>{cat.label}</span>
           </div>
         </div>
@@ -265,7 +282,7 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
           <Row label="Date" value={fmtDate(t.date)} />
-          {t.txnTime && <Row label="Time" value={t.txnTime} />}
+          <Row label="Time" value={t.txnTime ? fmtTime(t.txnTime) : "Not available"} />
           {t.itemDescription && <Row label="Item" value={t.itemDescription} />}
           <Row label="Receipt" value={t.hasReceipt ? "\u2713 Attached" : "\u25CB Missing"} />
           {t.rawEmail && <Row label="Source" value={t.rawEmail} />}
@@ -279,8 +296,8 @@ function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
         )}
 
         <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>Your Notes</div>
-          <textarea value={userNotes} onChange={(e) => setUserNotes(e.target.value)}
+          <label htmlFor="user-notes" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6, display: "block" }}>Your Notes</label>
+          <textarea id="user-notes" value={userNotes} onChange={(e) => setUserNotes(e.target.value)}
             placeholder="Add a note..."
             style={{
               width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius)",
@@ -318,7 +335,7 @@ function Row({ label, value }) {
 }
 
 // ── Date Range ──
-function DateRangePicker({ startDate, endDate, onStartChange, onEndChange, onPreset, isMobile }) {
+function DateRangePicker({ startDate, endDate, onStartChange, onEndChange, onPreset, isMobile, activePreset }) {
   const inputStyle = {
     padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6,
     fontSize: 13, background: "var(--bg-card)", color: "var(--text)",
@@ -334,16 +351,22 @@ function DateRangePicker({ startDate, endDate, onStartChange, onEndChange, onPre
       <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>\u2013</span>
       <input type="date" value={endDate} onChange={(e) => onEndChange(e.target.value)} style={inputStyle} />
       <div style={{ display: "flex", gap: 3 }}>
-        {[{ l: "7D", d: 7 }, { l: "30D", d: 30 }, { l: "90D", d: 90 }, { l: "1Y", d: 365 }, { l: "All", d: 0 }].map((p) => (
-          <button key={p.l} onClick={() => onPreset(p.d)} style={{
-            padding: "4px 10px", borderRadius: 5, border: "1px solid var(--border)",
-            background: "var(--bg-card)", fontSize: 11, fontWeight: 500, color: "var(--text-secondary)",
-            transition: "background 0.1s, color 0.1s",
-          }}
-            onMouseOver={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-            onMouseOut={(e) => { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-          >{p.l}</button>
-        ))}
+        {[{ l: "7D", d: 7 }, { l: "30D", d: 30 }, { l: "90D", d: 90 }, { l: "1Y", d: 365 }, { l: "All", d: 0 }].map((p) => {
+          const isActive = activePreset === p.d;
+          return (
+            <button key={p.l} onClick={() => onPreset(p.d)} aria-pressed={isActive} style={{
+              padding: "4px 10px", borderRadius: 5,
+              border: isActive ? "1px solid var(--accent)" : "1px solid var(--border)",
+              background: isActive ? "var(--accent-light)" : "var(--bg-card)",
+              fontSize: 11, fontWeight: isActive ? 600 : 500,
+              color: isActive ? "var(--accent)" : "var(--text-secondary)",
+              transition: "background 0.1s, color 0.1s",
+            }}
+              onMouseOver={(e) => { if (!isActive) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
+              onMouseOut={(e) => { if (!isActive) { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.color = "var(--text-secondary)"; } }}
+            >{p.l}</button>
+          );
+        })}
       </div>
     </div>
   );
@@ -433,11 +456,43 @@ function OverviewTab({ transactions, isMobile, chartColors = {} }) {
   const total = purchases.reduce((s, t) => s + t.amount, 0) - totalR;
   const rcpt = transactions.filter((t) => t.hasReceipt).length;
 
-  const donutData = { labels: cats.map(([c]) => CATEGORIES[c]?.label || c), datasets: [{ data: cats.map(([, v]) => v), backgroundColor: cats.map(([c]) => CATEGORIES[c]?.color || "#795548"), borderWidth: 0 }] };
-  const barData = { labels: cats.map(([c]) => CATEGORIES[c]?.label || c), datasets: [{ label: "Spend", data: cats.map(([, v]) => v), backgroundColor: cats.map(([c]) => CATEGORIES[c]?.color || "#795548"), borderRadius: 4 }] };
+  const donutData = {
+    labels: cats.map(([c]) => CATEGORIES[c]?.label || c),
+    datasets: [{
+      data: cats.map(([, v]) => v),
+      backgroundColor: cats.map(([c]) => CATEGORIES[c]?.color || "#795548"),
+      borderWidth: 3,
+      borderColor: "var(--bg-card)",
+    }],
+  };
+  const barData = {
+    labels: cats.map(([c]) => CATEGORIES[c]?.label || c),
+    datasets: [{
+      label: "Spend",
+      data: cats.map(([, v]) => v),
+      backgroundColor: cats.map(([c]) => CATEGORIES[c]?.color || "#795548"),
+      borderRadius: 6,
+    }],
+  };
 
-  const tc = chartColors.text || "#6b6b68";
-  const tcl = chartColors.textLight || "#9b9b97";
+  // Daily trend — bar per day
+  const byDay = {};
+  for (const t of purchases) byDay[t.date] = (byDay[t.date] || 0) + t.amount;
+  const daysSorted = Object.keys(byDay).sort();
+  const dailyData = {
+    labels: daysSorted.map((d) => { const dt = new Date(d + "T00:00:00"); return `${dt.getDate()} ${dt.toLocaleString("en-IN", { month: "short" })}`; }),
+    datasets: [{
+      label: "Daily",
+      data: daysSorted.map((d) => byDay[d]),
+      backgroundColor: "#1e40af",
+      borderRadius: 4,
+    }],
+  };
+
+  const tc = chartColors.text || "#111827";
+  const tcl = chartColors.textLight || "#6b7280";
+
+  const chartFont = { size: 13, weight: "bold" };
 
   return (
     <div>
@@ -450,20 +505,40 @@ function OverviewTab({ transactions, isMobile, chartColors = {} }) {
 
       <InsightsPanel transactions={transactions} isMobile={isMobile} />
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 14 : 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 14 : 20, marginBottom: 20 }}>
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: isMobile ? 16 : 22, boxShadow: "var(--shadow)" }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, color: "var(--text)" }}>Category Split</h3>
-          <div style={{ maxWidth: isMobile ? 200 : 240, margin: "0 auto" }}>
-            <Doughnut data={donutData} options={{ cutout: "65%", plugins: { legend: { position: "bottom", labels: { boxWidth: 10, padding: 8, color: tc, font: { size: 11 } } } } }} />
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14, color: "var(--text)", letterSpacing: -0.2 }}>Category Split</h3>
+          <div style={{ maxWidth: isMobile ? 220 : 260, margin: "0 auto" }}>
+            <Doughnut data={donutData} options={{
+              cutout: "62%",
+              plugins: {
+                legend: { position: "bottom", labels: { boxWidth: 12, padding: 10, color: tc, font: chartFont } },
+              },
+            }} />
           </div>
         </div>
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: isMobile ? 16 : 22, boxShadow: "var(--shadow)" }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, color: "var(--text)" }}>Breakdown</h3>
-          <Bar data={barData} options={{ indexAxis: "y", plugins: { legend: { display: false } }, scales: {
-            x: { grid: { display: false }, ticks: { callback: (v) => "\u20B9" + v.toLocaleString("en-IN"), color: tcl, font: { size: 11 } } },
-            y: { grid: { display: false }, ticks: { color: tc, font: { size: 11 } } },
-          } }} />
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14, color: "var(--text)", letterSpacing: -0.2 }}>Category Breakdown</h3>
+          <Bar data={barData} options={{
+            indexAxis: "y",
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { display: false }, ticks: { callback: (v) => "\u20B9" + v.toLocaleString("en-IN"), color: tcl, font: chartFont } },
+              y: { grid: { display: false }, ticks: { color: tc, font: chartFont } },
+            },
+          }} />
         </div>
+      </div>
+
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: isMobile ? 16 : 22, boxShadow: "var(--shadow)" }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14, color: "var(--text)", letterSpacing: -0.2 }}>Daily Spend</h3>
+        <Bar data={dailyData} options={{
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tcl, font: chartFont, maxRotation: 45, minRotation: 30 } },
+            y: { grid: { color: "var(--border)" }, ticks: { callback: (v) => "\u20B9" + v.toLocaleString("en-IN"), color: tcl, font: chartFont } },
+          },
+        }} />
       </div>
     </div>
   );
@@ -535,12 +610,13 @@ function TransactionsTab({ transactions, onToggleReceipt, onSelect, isMobile }) 
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0,
               }}>{cat.icon}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, fontSize: 14, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
-                <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 1 }}>
-                  {fmtDate(t.date)}{t.txnTime ? ` \u00B7 ${t.txnTime}` : ""}
-                  {t.isRefund && <span style={{ color: "var(--success)", fontWeight: 600, marginLeft: 6 }}>REFUND</span>}
+                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span>{fmtDate(t.date)}</span>
+                  {t.txnTime && <span style={{ color: "var(--text-tertiary)", fontWeight: 500 }}>{fmtTime(t.txnTime)}</span>}
+                  {t.isRefund && <span style={{ color: "var(--success)", fontWeight: 700, fontSize: 10, letterSpacing: 0.5, padding: "1px 6px", borderRadius: 4, background: "var(--success-bg, rgba(16,185,129,0.1))" }}>REFUND</span>}
                 </div>
-                {t.notes && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.notes}</div>}
+                {t.notes && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.notes}</div>}
               </div>
               <div style={{
                 fontWeight: 600, fontSize: 14, color: t.isRefund ? "var(--success)" : "var(--text)",
@@ -747,6 +823,7 @@ export default function Home() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedTxn, setSelectedTxn] = useState(null);
+  const [activePreset, setActivePreset] = useState(null);
   const isMobile = useIsMobile();
   const tabContainerRef = useRef(null);
   const [underline, setUnderline] = useState({ left: 0, width: 0 });
@@ -769,6 +846,7 @@ export default function Home() {
   }), [allTransactions, startDate, endDate]);
 
   const handlePreset = useCallback((d) => {
+    setActivePreset(d);
     if (d === 0) { setStartDate(""); setEndDate(""); }
     else {
       const e = new Date(), s = new Date();
@@ -783,7 +861,9 @@ export default function Home() {
       const res = await fetch("/api/transactions");
       const data = await res.json();
       if (data.transactions?.length) setAllTransactions(mapRows(data.transactions));
-    } catch { /* */ }
+    } catch {
+      setMessage("Could not load transactions. Pull to refresh or try again.");
+    }
   }, []);
 
   useEffect(() => {
@@ -804,12 +884,12 @@ export default function Home() {
     fetch("/api/sync", { method: "POST" })
       .then((r) => r.json())
       .then((d) => {
-        if (d.error && !d.error.includes("already")) setMessage("Error: " + d.error);
+        if (d.error && !d.error.includes("already")) setMessage("Sync failed. Please try again.");
         else { setMessage(d.message || "Done!"); loadTransactions(); }
         setSyncing(false);
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
       })
-      .catch((e) => { setMessage("Failed: " + e.message); setSyncing(false); });
+      .catch(() => { setMessage("Sync failed. Check your connection and try again."); setSyncing(false); });
     pollRef.current = setInterval(() => loadTransactions(), 60000);
     setTimeout(() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, 5 * 60 * 1000);
   }, [loadTransactions]);
@@ -835,7 +915,7 @@ export default function Home() {
   ];
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: isMobile ? "14px 12px" : "24px 24px" }}>
+    <div id="main-content" style={{ maxWidth: 1040, margin: "0 auto", padding: isMobile ? "14px 12px" : "24px 24px" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 16 : 22, flexWrap: "wrap", gap: 10, paddingBottom: isMobile ? 14 : 20, borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -853,7 +933,7 @@ export default function Home() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {message && <span style={{ fontSize: 11, color: message.startsWith("Error") ? "var(--danger)" : "var(--success)", maxWidth: 160 }}>{message}</span>}
+          {message && <span role="status" style={{ fontSize: 11, color: message.includes("failed") || message.includes("Could not") ? "var(--danger)" : "var(--success)", maxWidth: 160 }}>{message}</span>}
           {gmailStatus && (
             <span
               title={gmailStatus.connected
@@ -929,8 +1009,9 @@ export default function Home() {
           )}
 
           <DateRangePicker startDate={startDate} endDate={endDate}
-            onStartChange={setStartDate} onEndChange={setEndDate}
-            onPreset={handlePreset} isMobile={isMobile} />
+            onStartChange={(v) => { setStartDate(v); setActivePreset(null); }}
+            onEndChange={(v) => { setEndDate(v); setActivePreset(null); }}
+            onPreset={handlePreset} isMobile={isMobile} activePreset={activePreset} />
 
           {transactions.length === 0 && allTransactions.length > 0 ? (
             <div style={{ textAlign: "center", padding: 48 }}>

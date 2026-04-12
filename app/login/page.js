@@ -66,7 +66,7 @@ function LoginForm() {
       }
       router.push(result?.url || callbackUrl);
     } catch (err) {
-      setError(err.message || "Something went wrong");
+      setError("Unable to connect. Check your internet and try again.");
       setBusy(false);
     }
   };
@@ -110,7 +110,7 @@ function LoginForm() {
         </div>
 
         {error && (
-          <div style={{
+          <div role="alert" style={{
             background: "var(--bg-secondary)", border: "1px solid var(--danger)",
             color: "var(--danger)", fontSize: 12, padding: "9px 12px",
             borderRadius: "var(--radius)", marginBottom: 14, lineHeight: 1.5,
@@ -119,34 +119,46 @@ function LoginForm() {
 
         <form onSubmit={handleCredentials} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "signup" && (
-            <input
-              type="text"
-              placeholder="Name (optional)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={inputStyle}
-              autoComplete="name"
-            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label htmlFor="name" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Name (optional)</label>
+              <input
+                id="name"
+                type="text"
+                placeholder="e.g., Jane Smith"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={inputStyle}
+                autoComplete="name"
+              />
+            </div>
           )}
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={inputStyle}
-            autoComplete="email"
-          />
-          <input
-            type="password"
-            placeholder={mode === "signup" ? "Password (min 8 chars)" : "Password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={mode === "signup" ? 8 : undefined}
-            style={inputStyle}
-            autoComplete={mode === "signup" ? "new-password" : "current-password"}
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label htmlFor="email" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Email</label>
+            <input
+              id="email"
+              type="email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              style={inputStyle}
+              autoComplete="email"
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label htmlFor="password" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Password</label>
+            <input
+              id="password"
+              type="password"
+              placeholder={mode === "signup" ? "Min 8 characters" : "Enter your password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={mode === "signup" ? 8 : undefined}
+              style={inputStyle}
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            />
+          </div>
           <button
             type="submit"
             disabled={busy}
