@@ -201,12 +201,11 @@ function UserMenu({ session, theme, onToggleTheme, isMobile }) {
 function TransactionModal({ transaction: t, onClose, onUpdateNotes }) {
   const [userNotes, setUserNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
 
   useEffect(() => { if (t) setUserNotes(t.userNotes || ""); }, [t]);
   if (!t) return null;
   const cat = CATEGORIES[t.category] || CATEGORIES.other;
-
-  const [saveStatus, setSaveStatus] = useState("");
 
   const handleSaveNotes = async () => {
     setSaving(true);
