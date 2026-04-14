@@ -85,9 +85,9 @@ function LoginForm() {
     }}>
       <div style={{
         background: "var(--bg-card)", borderRadius: "var(--radius-lg)",
-        padding: "40px 32px", border: "1px solid var(--border)",
-        maxWidth: 400, width: "100%",
-        boxShadow: "var(--shadow-hover)",
+        padding: "48px 36px", border: "1px solid var(--border)",
+        maxWidth: 420, width: "100%",
+        boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
       }}>
         <div style={{ textAlign: "center" }}>
           <div style={{
@@ -99,9 +99,9 @@ function LoginForm() {
             <Image src="/vippy-logo.webp" alt="Vippy" width={72} height={72} priority style={{ objectFit: "contain" }} />
           </div>
 
-          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)", letterSpacing: -0.5 }}>Vippy Spend Tracker</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: "var(--text)", letterSpacing: -0.8 }}>Vippy Spend Tracker</div>
           <div style={{
-            fontSize: 12, color: "var(--text-tertiary)", marginTop: 6, marginBottom: 24,
+            fontSize: 12, color: "var(--text-tertiary)", marginTop: 8, marginBottom: 28,
             padding: "4px 12px", background: "var(--bg-secondary)", borderRadius: 20,
             display: "inline-block", border: "1px solid var(--border)",
           }}>
@@ -110,14 +110,15 @@ function LoginForm() {
         </div>
 
         {error && (
-          <div role="alert" style={{
-            background: "var(--bg-secondary)", border: "1px solid var(--danger)",
+          <div id="form-error" role="alert" style={{
+            background: "var(--danger-bg)", border: "1px solid var(--danger)",
             color: "var(--danger)", fontSize: 12, padding: "9px 12px",
             borderRadius: "var(--radius)", marginBottom: 14, lineHeight: 1.5,
-          }}>{error}</div>
+            display: "flex", alignItems: "center", gap: 8,
+          }}><span style={{ fontSize: 14 }}>{"\u2717"}</span> {error}</div>
         )}
 
-        <form onSubmit={handleCredentials} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <form onSubmit={handleCredentials} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {mode === "signup" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label htmlFor="name" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Name (optional)</label>
@@ -141,7 +142,9 @@ function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              style={inputStyle}
+              aria-invalid={!!error}
+              aria-describedby={error ? "form-error" : undefined}
+              style={{ ...inputStyle, borderColor: error ? "var(--danger)" : undefined }}
               autoComplete="email"
             />
           </div>
@@ -155,7 +158,9 @@ function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={mode === "signup" ? 8 : undefined}
-              style={inputStyle}
+              aria-invalid={!!error}
+              aria-describedby={error ? "form-error" : undefined}
+              style={{ ...inputStyle, borderColor: error ? "var(--danger)" : undefined }}
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
             />
           </div>
@@ -163,9 +168,9 @@ function LoginForm() {
             type="submit"
             disabled={busy}
             style={{
-              width: "100%", padding: "11px 24px", borderRadius: "var(--radius)",
+              width: "100%", padding: "13px 24px", borderRadius: "var(--radius)",
               border: "none", background: "var(--accent)", color: "#fff",
-              fontSize: 14, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer",
+              fontSize: 15, fontWeight: 700, cursor: busy ? "not-allowed" : "pointer",
               opacity: busy ? 0.7 : 1, marginTop: 4,
               transition: "opacity 0.15s, transform 0.05s",
             }}

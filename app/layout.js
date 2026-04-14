@@ -1,5 +1,18 @@
 import "./globals.css";
+import { Plus_Jakarta_Sans, DM_Sans } from "next/font/google";
 import Providers from "./providers";
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-dm",
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata = {
   title: "Vippy Spend Tracker",
@@ -23,7 +36,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${jakarta.variable} ${dmSans.variable}`}>
       <body>
         <a href="#main-content" className="skip-link">
           Skip to main content
