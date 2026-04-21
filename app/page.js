@@ -352,7 +352,7 @@ function PeriodSelector({ startDate, endDate, onStartChange, onEndChange, onPres
     <div className="period-selector">
       <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>Period</span>
       <input type="date" value={startDate} onChange={(e) => onStartChange(e.target.value)} style={inputStyle} />
-      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>\u2013</span>
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{"\u2013"}</span>
       <input type="date" value={endDate} onChange={(e) => onEndChange(e.target.value)} style={inputStyle} />
       <div style={{ display: "flex", gap: 4 }}>
         {[{ l: "7D", d: 7 }, { l: "30D", d: 30 }, { l: "90D", d: 90 }, { l: "1Y", d: 365 }, { l: "All", d: 0 }].map((p) => (
@@ -1355,6 +1355,127 @@ function SubscriptionsTab({ transactions, allTransactions, isMobile, chartColors
   );
 }
 
+// ── Sync Diagnostics ──
+function SyncDiagnostics() {
+  const [diag, setDiag] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const runDiag = async () => {
+    setLoading(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/sync/debug");
+      const data = await res.json();
+      setDiag(data);
+    } catch (e) {
+      setMsg("Diagnostic failed: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  const forceResync = async () => {
+    if (!confirm("Clear last_synced_at? Next sync will re-scan every email from scratch. This may take several minutes.")) return;
+    setResetting(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/sync/debug", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: true }),
+      });
+      const data = await res.json();
+      setMsg(data.message || data.error);
+      if (data.ok) await runDiag();
+    } catch (e) {
+      setMsg("Reset failed: " + e.message);
+    }
+    setResetting(false);
+  };
+
+  return (
+    <div className="chart-card" style={{ marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ fontFamily: "var(--font-display)", margin: 0 }}>Sync Diagnostics</h3>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={runDiag} disabled={loading} style={{
+            padding: "6px 14px", borderRadius: 999, border: "1px solid var(--border)",
+            background: "var(--bg-card)", color: "var(--text)", fontSize: 12, fontWeight: 600,
+          }}>{loading ? "Checking..." : "Run Diagnostics"}</button>
+          <button onClick={forceResync} disabled={resetting} style={{
+            padding: "6px 14px", borderRadius: 999, border: "1px solid var(--warning)",
+            background: "transparent", color: "var(--warning)", fontSize: 12, fontWeight: 600,
+          }}>{resetting ? "Resetting..." : "Force Full Resync"}</button>
+        </div>
+      </div>
+
+      {msg && (
+        <div style={{ padding: 10, background: "var(--bg-card-2)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--text-secondary)", marginBottom: 12 }}>
+          {msg}
+        </div>
+      )}
+
+      {!diag && !loading && (
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          Click <b>Run Diagnostics</b> to see last sync time, Gmail query counts, and latest transactions in the database.
+        </div>
+      )}
+
+      {diag && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {diag.error && (
+            <div style={{ padding: 10, background: "var(--danger-bg)", color: "var(--danger)", borderRadius: "var(--radius)", fontSize: 12 }}>
+              {diag.error}
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, fontSize: 12 }}>
+            <div style={{ color: "var(--text-muted)", fontWeight: 600 }}>Email:</div>
+            <div style={{ color: "var(--text)" }}>{diag.userEmail || "\u2014"}</div>
+            <div style={{ color: "var(--text-muted)", fontWeight: 600 }}>Last synced at:</div>
+            <div style={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{diag.lastSyncedAt || "never"}</div>
+            <div style={{ color: "var(--text-muted)", fontWeight: 600 }}>Date filter:</div>
+            <div style={{ color: "var(--text)", fontFamily: "monospace", fontSize: 11 }}>{diag.dateFilter}</div>
+          </div>
+
+          {diag.gmailQueries && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Gmail Query Results</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {diag.gmailQueries.map((q) => (
+                  <div key={q.name} style={{ padding: "8px 10px", background: "var(--bg-card-2)", borderRadius: "var(--radius)", fontSize: 11 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontWeight: 700, color: "var(--text)" }}>{q.name}</span>
+                      <span style={{ color: q.error ? "var(--danger)" : q.count > 0 ? "var(--success)" : "var(--text-muted)", fontWeight: 700 }}>
+                        {q.error ? "ERROR" : `${q.count} emails`}
+                      </span>
+                    </div>
+                    <div style={{ color: "var(--text-muted)", fontFamily: "monospace", marginTop: 4, wordBreak: "break-all" }}>{q.query || q.error}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {diag.recentTxns && diag.recentTxns.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Latest 5 in DB</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {diag.recentTxns.map((t) => (
+                  <div key={t.email_id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "4px 8px", background: "var(--bg-card-2)", borderRadius: 4 }}>
+                    <span>{t.date} \u00B7 {t.merchant}</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmt(t.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Logs Viewer ──
 function LogsViewer() {
   const [logs, setLogs] = useState([]);
@@ -1658,6 +1779,9 @@ function SettingsTab({ session, isMobile }) {
           </button>
         </form>
       </div>
+
+      {/* Sync Diagnostics */}
+      <SyncDiagnostics />
 
       {/* Logs */}
       <LogsViewer />
