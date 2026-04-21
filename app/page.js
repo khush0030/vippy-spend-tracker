@@ -167,9 +167,9 @@ function Sidebar({ activeTab, onTabChange, gmailStatus, onSync, syncing, missing
 
       <div className="sidebar-footer">
         {gmailStatus && (
-          <div className="sidebar-sync-status">
+          <div className="sidebar-sync-status" title={gmailStatus.connected ? `${gmailStatus.email} (${gmailStatus.totalMessages?.toLocaleString() ?? "?"} messages)` : `${gmailStatus.reason}: ${gmailStatus.detail}`}>
             <span className="sidebar-sync-dot" style={{ background: gmailStatus.connected ? "var(--success)" : "var(--danger)" }} />
-            <span>{gmailStatus.connected ? "Gmail synced" : "Disconnected"}</span>
+            <span>{gmailStatus.connected ? "Gmail synced" : "Gmail disconnected"}</span>
           </div>
         )}
         <button onClick={onSync} disabled={syncing} style={{
@@ -1355,6 +1355,103 @@ function SubscriptionsTab({ transactions, allTransactions, isMobile, chartColors
   );
 }
 
+// ── Logs Viewer ──
+function LogsViewer() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const [setupHint, setSetupHint] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = filter === "all" ? "" : `?level=${filter}`;
+      const res = await fetch(`/api/logs${q}`);
+      const data = await res.json();
+      setLogs(data.logs || []);
+      setSetupHint(data.error || null);
+    } catch {
+      setSetupHint("Failed to load logs");
+    }
+    setLoading(false);
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const levelColor = (l) => l === "error" ? "var(--danger)" : l === "warn" ? "var(--warning)" : "var(--text-muted)";
+  const levelBg = (l) => l === "error" ? "var(--danger-bg)" : l === "warn" ? "var(--warning-bg)" : "var(--bg-card-2)";
+
+  const fmtDt = (s) => {
+    const d = new Date(s);
+    return d.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <div className="chart-card" style={{ marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ fontFamily: "var(--font-display)", margin: 0 }}>App Logs</h3>
+        <div style={{ display: "flex", gap: 4 }}>
+          {["all", "error", "warn", "info"].map((f) => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: "4px 12px", borderRadius: 999, border: "1px solid",
+              borderColor: filter === f ? "var(--brand)" : "var(--border)",
+              background: filter === f ? "var(--brand)" : "transparent",
+              color: filter === f ? "#fff" : "var(--text-muted)",
+              fontSize: 11, fontWeight: 600, textTransform: "capitalize",
+            }}>{f}</button>
+          ))}
+          <button onClick={load} style={{
+            padding: "4px 12px", borderRadius: 999, border: "1px solid var(--border)",
+            background: "var(--bg-card)", color: "var(--text)", fontSize: 11, fontWeight: 600,
+          }}>Refresh</button>
+        </div>
+      </div>
+
+      {setupHint && (
+        <div style={{ padding: 12, background: "var(--warning-bg)", borderRadius: "var(--radius)", fontSize: 12, color: "var(--warning)", marginBottom: 12 }}>
+          {setupHint}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>Loading...</div>
+      ) : logs.length === 0 ? (
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>No logs yet.</div>
+      ) : (
+        <div style={{ maxHeight: 480, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+          {logs.map((log) => (
+            <div key={log.id} style={{
+              padding: "10px 14px", borderRadius: "var(--radius)", background: levelBg(log.level),
+              borderLeft: `3px solid ${levelColor(log.level)}`,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
+                    padding: "2px 6px", borderRadius: 4, background: levelColor(log.level), color: "#fff",
+                  }}>{log.level}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>{log.source}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{log.event}</span>
+                </div>
+                <span style={{ fontSize: 10, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{fmtDt(log.created_at)}</span>
+              </div>
+              {log.message && <div style={{ fontSize: 12, color: "var(--text)" }}>{log.message}</div>}
+              {log.details && (
+                <details style={{ marginTop: 4 }}>
+                  <summary style={{ fontSize: 10, color: "var(--text-muted)", cursor: "pointer" }}>details</summary>
+                  <pre style={{ fontSize: 10, color: "var(--text-secondary)", overflow: "auto", marginTop: 4, padding: 6, background: "var(--bg-card)", borderRadius: 4 }}>
+                    {JSON.stringify(log.details, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Settings Tab ──
 function SettingsTab({ session, isMobile }) {
   const [avatarUrl, setAvatarUrl] = useState(session?.user?.image || null);
@@ -1437,7 +1534,7 @@ function SettingsTab({ session, isMobile }) {
   };
 
   return (
-    <div style={{ maxWidth: 560 }}>
+    <div style={{ maxWidth: 720 }}>
       {/* Avatar Section */}
       <div className="chart-card" style={{ marginBottom: 24 }}>
         <h3 style={{ fontFamily: "var(--font-display)" }}>Profile</h3>
@@ -1561,6 +1658,9 @@ function SettingsTab({ session, isMobile }) {
           </button>
         </form>
       </div>
+
+      {/* Logs */}
+      <LogsViewer />
 
       {/* Sign Out */}
       <div className="chart-card">
@@ -1764,6 +1864,26 @@ export default function Home() {
             </span>
           )}
         </div>
+
+        {/* Gmail disconnected banner \u2014 root cause of sync failures */}
+        {gmailStatus && !gmailStatus.connected && (
+          <div style={{
+            padding: "14px 18px", background: "var(--danger-bg)", borderRadius: "var(--radius-lg)",
+            border: "1px solid var(--danger)", marginBottom: 24,
+            display: "flex", alignItems: "center", gap: 12,
+          }}>
+            <span style={{ fontSize: 20 }}>{"\u26A0\uFE0F"}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--danger)" }}>Gmail sync is disconnected</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                <strong>Reason:</strong> {gmailStatus.reason} \u2014 {gmailStatus.detail}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                Transactions will not sync until reconnected. Sign out and sign in with Google again to refresh the token.
+              </div>
+            </div>
+          </div>
+        )}
 
         {allTransactions.length === 0 && !syncing && !message ? (
           <div style={{ textAlign: "center", padding: isMobile ? "60px 16px" : "80px 20px" }}>

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { syncUserTransactions } from "@/lib/sync";
+import { logError } from "@/lib/logger";
 
 export const maxDuration = 300;
 
@@ -44,6 +45,13 @@ export async function POST() {
           : `No new transactions. ${allTransactions.length} total.`,
     });
   } catch (error) {
+    await logError({
+      source: "sync",
+      event: "endpoint_failed",
+      userId,
+      message: "Manual sync endpoint failed",
+      error,
+    });
     return NextResponse.json(
       { error: error.message || "Failed to sync emails" },
       { status: 500 }
