@@ -40,7 +40,6 @@ export async function PATCH(request) {
     }
 
     const updates = {};
-    if (body.hasReceipt !== undefined) updates.has_receipt = body.hasReceipt;
     if (body.userNotes !== undefined) updates.user_notes = body.userNotes;
 
     if (Object.keys(updates).length === 0) {

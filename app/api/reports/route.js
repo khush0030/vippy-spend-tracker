@@ -30,7 +30,7 @@ export async function GET(request) {
     const transactions = (data || []).filter((t) => t.amount >= 10);
 
     if (format === "csv") {
-      const header = "Date,Time,Merchant,Category,Amount (INR),Refund,Receipt,Item Description,AI Notes,User Notes";
+      const header = "Date,Time,Merchant,Category,Amount (INR),Refund,Item Description,AI Notes,User Notes";
       const rows = transactions.map((t) =>
         [
           t.date,
@@ -39,7 +39,6 @@ export async function GET(request) {
           t.category,
           t.is_refund ? -t.amount : t.amount,
           t.is_refund ? "Yes" : "No",
-          t.has_receipt ? "Yes" : "No",
           `"${(t.item_description || "").replace(/"/g, '""')}"`,
           `"${(t.notes || "").replace(/"/g, '""')}"`,
           `"${(t.user_notes || "").replace(/"/g, '""')}"`,
@@ -77,8 +76,6 @@ export async function GET(request) {
       });
     }
 
-    const missingReceipts = transactions.filter((t) => !t.has_receipt && !t.is_refund);
-
     return NextResponse.json({
       report: {
         generatedAt: new Date().toISOString(),
@@ -94,14 +91,8 @@ export async function GET(request) {
           netSpend: totalSpend - totalRefunds,
           refundCount: refunds.length,
           avgTransaction: purchases.length ? totalSpend / purchases.length : 0,
-          missingReceipts: missingReceipts.length,
         },
         categoryBreakdown,
-        missingReceipts: missingReceipts.map((t) => ({
-          date: t.date,
-          merchant: t.merchant,
-          amount: t.amount,
-        })),
       },
     });
   } catch (error) {

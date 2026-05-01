@@ -36,6 +36,9 @@
   --text-secondary: #374151;
   --text-muted: #6B7280;
 
+  /* Heatmap empty cell */
+  --heat-empty: #E2E8F0;
+
   /* Legacy aliases */
   --bg: var(--bg-page);
   --bg-secondary: var(--bg-card-2);
@@ -81,6 +84,9 @@
   --text-primary: #F1F5F9;
   --text-secondary: #94A3B8;
   --text-muted: #64748B;
+
+  /* Heatmap empty cell */
+  --heat-empty: rgba(255, 255, 255, 0.05);
 
   /* Legacy aliases */
   --bg: var(--bg-page);
@@ -562,19 +568,6 @@ button:active {
   color: var(--text-secondary);
 }
 
-/* ── Receipt urgency tiers ── */
-.receipt-row-high {
-  border-left: 3px solid var(--danger);
-}
-
-.receipt-row-medium {
-  border-left: 3px solid var(--warning);
-}
-
-.receipt-row-low {
-  border-left: 3px solid transparent;
-}
-
 /* ── Subscription badges ── */
 .sub-badge {
   font-size: 10px;
@@ -657,21 +650,6 @@ button:active {
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: var(--radius);
-}
-
-/* ── Receipt progress bar ── */
-.receipt-progress-bar {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--bg-card-2);
-  overflow: hidden;
-}
-
-.receipt-progress-fill {
-  height: 100%;
-  border-radius: 4px;
-  background: linear-gradient(90deg, var(--brand), #10B981);
-  transition: width 0.6s ease;
 }
 
 /* ── Responsive ── */
