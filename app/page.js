@@ -660,10 +660,10 @@ export default function Home() {
               </div>
             ) : (
               <div key={activeTab} role="tabpanel" style={{ animation: "slideUp 0.2s ease" }}>
-                {activeTab === "overview" && <OverviewTab transactions={transactions} isMobile={isMobile} chartColors={chartColors} />}
-                {activeTab === "transactions" && <TransactionsTab transactions={transactions} onSelect={setSelectedTxn} isMobile={isMobile} />}
+                {activeTab === "overview" && <OverviewTab transactions={transactions} allTransactions={allTransactions} startDate={startDate} endDate={endDate} isMobile={isMobile} chartColors={chartColors} onSelect={setSelectedTxn} />}
+                {activeTab === "transactions" && <TransactionsTab transactions={transactions} allTransactions={allTransactions} startDate={startDate} endDate={endDate} onSelect={setSelectedTxn} isMobile={isMobile} />}
                 {activeTab === "subscriptions" && <SubscriptionsTab transactions={transactions} allTransactions={allTransactions} isMobile={isMobile} chartColors={chartColors} />}
-                {activeTab === "reports" && <ReportsTab transactions={transactions} startDate={startDate} endDate={endDate} isMobile={isMobile} />}
+                {activeTab === "reports" && <ReportsTab transactions={transactions} allTransactions={allTransactions} startDate={startDate} endDate={endDate} isMobile={isMobile} />}
                 {activeTab === "settings" && <SettingsTab session={session} isMobile={isMobile} />}
               </div>
             )}

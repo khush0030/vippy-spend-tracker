@@ -1,7 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { normalizeMerchant, colorOf, labelOf, fmtINR, CATEGORY_LABELS } from "../overview/aggregations";
+import {
+  normalizeMerchant,
+  colorOf,
+  labelOf,
+  fmtINR,
+  CATEGORY_LABELS,
+  priorWindow,
+  delta,
+  summarize,
+  anomalies,
+} from "../overview/aggregations";
+import DeltaBadge from "../shared/DeltaBadge";
+import AnomalyBadge from "../shared/AnomalyBadge";
 
 const numStyle = {
   fontFamily: "var(--font-display)",
@@ -37,16 +49,31 @@ const fmtTime = (t) => {
   return `${hr % 12 || 12}:${m} ${suf}`;
 };
 
-export default function TransactionsTab({ transactions, onSelect, isMobile }) {
+export default function TransactionsTab({ transactions, allTransactions, onSelect, isMobile, startDate, endDate }) {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+
+  const allTxns = allTransactions || transactions;
 
   const categories = useMemo(() => {
     const cs = new Set();
     for (const t of transactions) cs.add(t.category);
     return [...cs];
   }, [transactions]);
+
+  const stats = useMemo(() => summarize(transactions), [transactions]);
+  const prior = useMemo(() => priorWindow(allTxns, startDate, endDate), [allTxns, startDate, endDate]);
+  const priorStats = useMemo(() => summarize(prior.prior), [prior.prior]);
+  const hasPrior = prior.prior.length > 0;
+  const spendDelta = hasPrior ? delta(stats.totalSpend, priorStats.totalSpend) : null;
+  const refundDelta = hasPrior ? delta(stats.totalRefunds, priorStats.totalRefunds) : null;
+  const netDelta = hasPrior ? delta(stats.netSpend, priorStats.netSpend) : null;
+
+  const anomMap = useMemo(() => {
+    const list = anomalies(allTxns, { sigma: 2, limit: 50 });
+    return new Map(list.map((a) => [a.txn.id, a]));
+  }, [allTxns]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -80,6 +107,21 @@ export default function TransactionsTab({ transactions, onSelect, isMobile }) {
     }
     return [...groups.entries()];
   }, [filtered, sortBy]);
+
+  // Build month-to-date running totals for each date in the visible list, using allTxns (purchases only)
+  const mtdByDate = useMemo(() => {
+    if (!grouped) return new Map();
+    const dates = new Set(grouped.map(([d]) => d));
+    const out = new Map();
+    for (const date of dates) {
+      const monthPrefix = date.slice(0, 7);
+      const sum = (allTxns || [])
+        .filter((t) => !t.isRefund && t.date.startsWith(monthPrefix) && t.date <= date)
+        .reduce((s, t) => s + t.amount, 0);
+      out.set(date, sum);
+    }
+    return out;
+  }, [grouped, allTxns]);
 
   return (
     <div>
@@ -192,22 +234,10 @@ export default function TransactionsTab({ transactions, onSelect, isMobile }) {
           flexWrap: "wrap",
         }}
       >
-        <div>
-          <div style={{ ...sectionLabelStyle, marginBottom: 6, fontSize: 10 }}>Showing</div>
-          <div style={{ ...numStyle, fontSize: 22, fontWeight: 700, color: "var(--text)" }}>{totals.count}</div>
-        </div>
-        <div>
-          <div style={{ ...sectionLabelStyle, marginBottom: 6, fontSize: 10 }}>Spend</div>
-          <div style={{ ...numStyle, fontSize: 22, fontWeight: 700, color: "var(--text)" }}>{fmtINR(totals.spend)}</div>
-        </div>
-        <div>
-          <div style={{ ...sectionLabelStyle, marginBottom: 6, fontSize: 10 }}>Refunds</div>
-          <div style={{ ...numStyle, fontSize: 22, fontWeight: 700, color: "var(--success)" }}>{fmtINR(totals.refunds)}</div>
-        </div>
-        <div style={{ marginLeft: isMobile ? 0 : "auto" }}>
-          <div style={{ ...sectionLabelStyle, marginBottom: 6, fontSize: 10 }}>Net</div>
-          <div style={{ ...numStyle, fontSize: 22, fontWeight: 800, color: "var(--brand)" }}>{fmtINR(totals.net)}</div>
-        </div>
+        <TotalCell label="Showing" value={totals.count} />
+        <TotalCell label="Spend" value={fmtINR(totals.spend)} delta={spendDelta} invert />
+        <TotalCell label="Refunds" value={fmtINR(totals.refunds)} valueColor="var(--success)" delta={refundDelta} />
+        <TotalCell label="Net" value={fmtINR(totals.net)} valueColor="var(--brand)" delta={netDelta} invert push />
       </div>
 
       {/* List */}
@@ -220,6 +250,7 @@ export default function TransactionsTab({ transactions, onSelect, isMobile }) {
         ) : grouped ? (
           grouped.map(([date, list], gi) => {
             const dayTotal = list.filter((t) => !t.isRefund).reduce((s, t) => s + t.amount, 0);
+            const mtd = mtdByDate.get(date) || 0;
             return (
               <div key={date} style={{ borderTop: gi > 0 ? "1px solid var(--border)" : "none" }}>
                 <div
@@ -229,26 +260,45 @@ export default function TransactionsTab({ transactions, onSelect, isMobile }) {
                     alignItems: "baseline",
                     padding: isMobile ? "14px 16px 8px" : "18px 22px 10px",
                     background: "var(--bg-card-2)",
+                    gap: 10,
+                    flexWrap: "wrap",
                   }}
                 >
                   <span style={{ ...sectionLabelStyle, fontSize: 10 }}>{formatDateHeader(date)}</span>
-                  <span style={{ ...numStyle, fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>{fmtINR(dayTotal)}</span>
+                  <span style={{ display: "flex", gap: 14, alignItems: "baseline" }}>
+                    <span style={{ ...numStyle, fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>{fmtINR(dayTotal)} day</span>
+                    <span style={{ ...numStyle, fontSize: 11, color: "var(--text-muted)", opacity: 0.75 }}>{fmtINR(mtd)} MTD</span>
+                  </span>
                 </div>
                 {list.map((t, i) => (
-                  <Row key={t.id} t={t} isMobile={isMobile} onSelect={onSelect} divider={i > 0} />
+                  <Row key={t.id} t={t} isMobile={isMobile} onSelect={onSelect} divider={i > 0} anom={anomMap.get(t.id)} />
                 ))}
               </div>
             );
           })
         ) : (
-          filtered.map((t, i) => <Row key={t.id} t={t} isMobile={isMobile} onSelect={onSelect} divider={i > 0} />)
+          filtered.map((t, i) => <Row key={t.id} t={t} isMobile={isMobile} onSelect={onSelect} divider={i > 0} anom={anomMap.get(t.id)} />)
         )}
       </div>
     </div>
   );
 }
 
-function Row({ t, isMobile, onSelect, divider }) {
+function TotalCell({ label, value, valueColor, delta: d, invert, push }) {
+  return (
+    <div style={{ marginLeft: push ? "auto" : 0 }}>
+      <div style={{ ...sectionLabelStyle, marginBottom: 6, fontSize: 10 }}>{label}</div>
+      <div style={{ ...numStyle, fontSize: 22, fontWeight: 700, color: valueColor || "var(--text)" }}>{value}</div>
+      {d && (
+        <div style={{ marginTop: 4 }}>
+          <DeltaBadge delta={d} invert={invert} compact />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Row({ t, isMobile, onSelect, divider, anom }) {
   const cat = t.category;
   const merchantName = normalizeMerchant(t.merchant);
   return (
@@ -288,9 +338,13 @@ function Row({ t, isMobile, onSelect, divider }) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             fontFamily: "var(--font-display)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
           }}
         >
-          {merchantName}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{merchantName}</span>
+          {anom && <AnomalyBadge baseline={anom.baseline} sigma={anom.sigma} compact />}
         </div>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3, display: "flex", gap: 8, alignItems: "center" }}>
           <span>{labelOf(cat)}</span>

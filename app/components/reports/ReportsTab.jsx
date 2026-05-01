@@ -8,7 +8,15 @@ import {
   colorOf,
   labelOf,
   fmtINR,
+  fmtINRcompact,
+  priorWindow,
+  delta,
+  recurringVsDiscretionary,
+  topMovers,
+  spendHistogram,
+  refundRecoveryByCategory,
 } from "../overview/aggregations";
+import DeltaBadge from "../shared/DeltaBadge";
 
 const numStyle = {
   fontFamily: "var(--font-display)",
@@ -34,10 +42,29 @@ const fmtPeriod = (s, e) => {
   return `${sd} → ${ed}`;
 };
 
-export default function ReportsTab({ transactions, startDate, endDate, isMobile }) {
+export default function ReportsTab({ transactions, allTransactions, startDate, endDate, isMobile }) {
   const stats = useMemo(() => summarize(transactions), [transactions]);
   const cats = useMemo(() => byCategory(transactions), [transactions]);
   const merchants = useMemo(() => topMerchants(transactions, 10), [transactions]);
+  const recurring = useMemo(() => recurringVsDiscretionary(transactions), [transactions]);
+  const histogram = useMemo(() => spendHistogram(transactions), [transactions]);
+  const refunds = useMemo(() => refundRecoveryByCategory(transactions), [transactions]);
+
+  const prior = useMemo(
+    () => priorWindow(allTransactions || [], startDate, endDate),
+    [allTransactions, startDate, endDate]
+  );
+  const priorStats = useMemo(() => summarize(prior.prior), [prior.prior]);
+  const priorCats = useMemo(() => byCategory(prior.prior), [prior.prior]);
+  const movers = useMemo(() => topMovers(transactions, prior.prior, 3), [transactions, prior.prior]);
+
+  const hasPrior = prior.prior.length > 0;
+  const netDelta = hasPrior ? delta(stats.netSpend, priorStats.netSpend) : null;
+  const txnDelta = hasPrior ? delta(stats.txnCount, priorStats.txnCount) : null;
+  const refundDelta = hasPrior ? delta(stats.totalRefunds, priorStats.totalRefunds) : null;
+  const avgDelta = hasPrior ? delta(stats.avgTransaction, priorStats.avgTransaction) : null;
+
+  const histMax = Math.max(...histogram.map((h) => h.count), 1);
 
   const downloadCSV = () => {
     const p = new URLSearchParams();
@@ -93,10 +120,10 @@ export default function ReportsTab({ transactions, startDate, endDate, isMobile 
             {fmtPeriod(startDate, endDate)}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 18 }}>
-            <Stat label="Net Spend" value={fmtINR(stats.netSpend)} accent="#7C3AED" />
-            <Stat label="Transactions" value={stats.txnCount} accent="#0EA5E9" />
-            <Stat label="Refunds" value={fmtINR(stats.totalRefunds)} accent="#10B981" sub={`${stats.refundCount} returns`} />
-            <Stat label="Avg Transaction" value={fmtINR(stats.avgTransaction)} accent="#F59E0B" />
+            <Stat label="Net Spend" value={fmtINR(stats.netSpend)} accent="#7C3AED" delta={netDelta} invert />
+            <Stat label="Transactions" value={stats.txnCount} accent="#0EA5E9" delta={txnDelta} invert />
+            <Stat label="Refunds" value={fmtINR(stats.totalRefunds)} accent="#10B981" sub={`${stats.refundCount} returns`} delta={refundDelta} />
+            <Stat label="Avg Transaction" value={fmtINR(stats.avgTransaction)} accent="#F59E0B" delta={avgDelta} invert />
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 28, flexWrap: "wrap" }}>
             <ExportButton onClick={downloadCSV} label="Export CSV" primary />
@@ -104,6 +131,68 @@ export default function ReportsTab({ transactions, startDate, endDate, isMobile 
           </div>
         </div>
       </section>
+
+      {/* Recurring vs Discretionary */}
+      {recurring.total > 0 && (
+        <section style={{ marginBottom: 36 }}>
+          <h2 style={sectionLabelStyle}>Where your money is locked</h2>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 22 }}>
+            <div style={{ display: "flex", gap: 24, marginBottom: 16, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
+                  Recurring
+                </div>
+                <div style={{ ...numStyle, fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
+                  {fmtINR(recurring.recurring)}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
+                  {recurring.recurringPct.toFixed(1)}% of net
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
+                  Discretionary
+                </div>
+                <div style={{ ...numStyle, fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
+                  {fmtINR(recurring.discretionary)}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
+                  {recurring.discretionaryPct.toFixed(1)}% of net
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", background: "var(--bg-card-2)" }}>
+              <div
+                style={{
+                  width: `${recurring.recurringPct}%`,
+                  background: "#0EA5E9",
+                  transition: "width 0.4s",
+                }}
+                title={`Recurring · ${fmtINR(recurring.recurring)}`}
+              />
+              <div
+                style={{
+                  width: `${recurring.discretionaryPct}%`,
+                  background: "#7C3AED",
+                  transition: "width 0.4s",
+                }}
+                title={`Discretionary · ${fmtINR(recurring.discretionary)}`}
+              />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Top movers */}
+      {hasPrior && (movers.increases.length > 0 || movers.decreases.length > 0) && (
+        <section style={{ marginBottom: 36 }}>
+          <h2 style={sectionLabelStyle}>Biggest changes vs prior period</h2>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
+            <MoverCard title="Up" items={movers.increases} accent="#EF4444" />
+            <MoverCard title="Down" items={movers.decreases} accent="#10B981" />
+          </div>
+        </section>
+      )}
 
       {/* Category breakdown */}
       <section style={{ marginBottom: 36 }}>
@@ -120,7 +209,7 @@ export default function ReportsTab({ transactions, startDate, endDate, isMobile 
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.6fr 1fr 1fr 1fr 1fr",
+                gridTemplateColumns: hasPrior ? "1.4fr 1fr 1fr 1fr 1fr 0.8fr" : "1.6fr 1fr 1fr 1fr 1fr",
                 gap: 12,
                 padding: "12px 22px",
                 background: "var(--bg-card-2)",
@@ -137,49 +226,67 @@ export default function ReportsTab({ transactions, startDate, endDate, isMobile 
               <span style={{ textAlign: "right" }}>Share</span>
               <span style={{ textAlign: "right" }}>Txns</span>
               <span style={{ textAlign: "right" }}>Avg</span>
+              {hasPrior && <span style={{ textAlign: "right" }}>vs prior</span>}
             </div>
           )}
-          {cats.map((c, i) => (
-            <div
-              key={c.category}
-              style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr auto" : "1.6fr 1fr 1fr 1fr 1fr",
-                gap: 12,
-                padding: isMobile ? "14px 16px" : "16px 22px",
-                borderTop: i > 0 ? "1px solid var(--border)" : "none",
-                alignItems: "center",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: colorOf(c.category), flexShrink: 0 }} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-display)" }}>
-                  {labelOf(c.category)}
-                </span>
-                {isMobile && (
-                  <span style={{ ...numStyle, fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
-                    {c.pct.toFixed(0)}%
+          {cats.map((c, i) => {
+            const p = priorCats.find((x) => x.category === c.category);
+            const dCat = p ? delta(c.amount, p.amount) : null;
+            return (
+              <div
+                key={c.category}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile
+                    ? "1fr auto"
+                    : hasPrior
+                    ? "1.4fr 1fr 1fr 1fr 1fr 0.8fr"
+                    : "1.6fr 1fr 1fr 1fr 1fr",
+                  gap: 12,
+                  padding: isMobile ? "14px 16px" : "16px 22px",
+                  borderTop: i > 0 ? "1px solid var(--border)" : "none",
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: colorOf(c.category), flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-display)" }}>
+                    {labelOf(c.category)}
                   </span>
+                  {isMobile && (
+                    <span style={{ ...numStyle, fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
+                      {c.pct.toFixed(0)}%
+                    </span>
+                  )}
+                </div>
+                <div style={{ ...numStyle, fontSize: 15, fontWeight: 700, color: "var(--text)", textAlign: "right" }}>
+                  {fmtINR(c.amount)}
+                </div>
+                {!isMobile && (
+                  <>
+                    <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>{c.pct.toFixed(1)}%</div>
+                    <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>{c.count}</div>
+                    <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>
+                      {fmtINR(c.amount / c.count)}
+                    </div>
+                    {hasPrior && (
+                      <div style={{ textAlign: "right" }}>
+                        {dCat ? <DeltaBadge delta={dCat} invert compact /> : <span style={{ fontSize: 10, color: "var(--text-muted)" }}>new</span>}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-              <div style={{ ...numStyle, fontSize: 15, fontWeight: 700, color: "var(--text)", textAlign: "right" }}>
-                {fmtINR(c.amount)}
-              </div>
-              {!isMobile && (
-                <>
-                  <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>{c.pct.toFixed(1)}%</div>
-                  <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>{c.count}</div>
-                  <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>
-                    {fmtINR(c.amount / c.count)}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
+            );
+          })}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr auto" : "1.6fr 1fr 1fr 1fr 1fr",
+              gridTemplateColumns: isMobile
+                ? "1fr auto"
+                : hasPrior
+                ? "1.4fr 1fr 1fr 1fr 1fr 0.8fr"
+                : "1.6fr 1fr 1fr 1fr 1fr",
               gap: 12,
               padding: isMobile ? "14px 16px" : "16px 22px",
               borderTop: "2px solid var(--border-strong)",
@@ -196,11 +303,90 @@ export default function ReportsTab({ transactions, startDate, endDate, isMobile 
                 <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>100%</div>
                 <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>{stats.txnCount}</div>
                 <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>{fmtINR(stats.avgTransaction)}</div>
+                {hasPrior && (
+                  <div style={{ textAlign: "right" }}>
+                    {netDelta && <DeltaBadge delta={netDelta} invert compact />}
+                  </div>
+                )}
               </>
             )}
           </div>
         </div>
       </section>
+
+      {/* Spend distribution histogram */}
+      <section style={{ marginBottom: 36 }}>
+        <h2 style={sectionLabelStyle}>Transaction size distribution</h2>
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 22 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {histogram.map((b) => (
+              <div key={b.key} style={{ display: "grid", gridTemplateColumns: isMobile ? "90px 1fr 70px" : "120px 1fr 100px 90px", gap: 12, alignItems: "center" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-display)" }}>{b.label}</span>
+                <div style={{ position: "relative", height: 10, background: "var(--bg-card-2)", borderRadius: 5, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${(b.count / histMax) * 100}%`,
+                      background: "#7C3AED",
+                      opacity: 0.85,
+                      borderRadius: 5,
+                    }}
+                  />
+                </div>
+                <span style={{ ...numStyle, fontSize: 13, color: "var(--text)", fontWeight: 600, textAlign: "right" }}>
+                  {b.count} txn{b.count === 1 ? "" : "s"}
+                </span>
+                {!isMobile && (
+                  <span style={{ ...numStyle, fontSize: 12, color: "var(--text-muted)", textAlign: "right" }}>
+                    {fmtINRcompact(b.sum)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Refund recovery */}
+      {refunds.length > 0 && (
+        <section style={{ marginBottom: 36 }}>
+          <h2 style={sectionLabelStyle}>Refund recovery rate</h2>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+            {refunds.map((r, i) => (
+              <div
+                key={r.category}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr auto auto" : "1fr 1fr 1fr 100px",
+                  gap: 14,
+                  padding: "14px 22px",
+                  borderTop: i > 0 ? "1px solid var(--border)" : "none",
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: colorOf(r.category) }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{labelOf(r.category)}</span>
+                </div>
+                {!isMobile && (
+                  <div style={{ ...numStyle, fontSize: 13, color: "var(--text-muted)", textAlign: "right" }}>
+                    {fmtINR(r.spend)} spent
+                  </div>
+                )}
+                <div style={{ ...numStyle, fontSize: 13, color: "var(--success)", textAlign: "right", fontWeight: 600 }}>
+                  {fmtINR(r.refund)}
+                </div>
+                <div style={{ ...numStyle, fontSize: 13, fontWeight: 700, color: "var(--text)", textAlign: "right" }}>
+                  {r.rate.toFixed(1)}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Top merchants */}
       <section>
@@ -254,7 +440,7 @@ export default function ReportsTab({ transactions, startDate, endDate, isMobile 
   );
 }
 
-function Stat({ label, value, sub, accent }) {
+function Stat({ label, value, sub, accent, delta: d, invert }) {
   return (
     <div>
       <div
@@ -272,6 +458,11 @@ function Stat({ label, value, sub, accent }) {
       </div>
       <div style={{ ...numStyle, fontSize: 24, fontWeight: 700, color: "var(--text)", lineHeight: 1.05 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{sub}</div>}
+      {d && (
+        <div style={{ marginTop: 6 }}>
+          <DeltaBadge delta={d} invert={invert} />
+        </div>
+      )}
       {accent && (
         <div
           style={{
@@ -282,6 +473,43 @@ function Stat({ label, value, sub, accent }) {
             marginTop: 10,
           }}
         />
+      )}
+    </div>
+  );
+}
+
+function MoverCard({ title, items, accent }) {
+  return (
+    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 18 }}>
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: accent,
+          marginBottom: 14,
+          fontFamily: "var(--font-display)",
+        }}
+      >
+        {title}
+      </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>No notable changes.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {items.map((m) => (
+            <div key={m.category} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: colorOf(m.category), flexShrink: 0 }} />
+              <span style={{ flex: 1, color: "var(--text)", fontWeight: 500 }}>{labelOf(m.category)}</span>
+              <span style={{ ...numStyle, fontSize: 12, color: "var(--text-muted)" }}>{fmtINR(m.prevAmount)} → {fmtINR(m.currAmount)}</span>
+              <span style={{ ...numStyle, fontSize: 12, fontWeight: 700, color: accent, width: 60, textAlign: "right" }}>
+                {m.deltaAbs > 0 ? "+" : ""}
+                {fmtINR(m.deltaAbs)}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
