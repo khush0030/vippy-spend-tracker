@@ -1,9 +1,12 @@
+import { normalizeMerchant } from "../overview/aggregations";
+
 export function buildSubscriptions(allTransactions) {
   const subs = (allTransactions || []).filter((t) => t.category === "subscriptions" && !t.isRefund);
   const byMerchant = {};
   for (const t of subs) {
-    if (!byMerchant[t.merchant]) byMerchant[t.merchant] = [];
-    byMerchant[t.merchant].push(t);
+    const k = normalizeMerchant(t.merchant);
+    if (!byMerchant[k]) byMerchant[k] = [];
+    byMerchant[k].push(t);
   }
 
   return Object.entries(byMerchant)
