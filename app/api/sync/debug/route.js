@@ -46,8 +46,8 @@ export async function GET() {
     : "";
 
   const queries = [
-    { name: "hdfc", q: `(from:alerts@hdfcbank.net OR from:noreply@hdfcbank.net OR (from:hdfcbank.net (subject:transaction OR subject:refund OR subject:reversal OR subject:credit)))${dateFilter}` },
-    { name: "hdfc_broad", q: `(from:hdfcbank.net OR from:hdfc.com OR subject:"HDFC Bank") newer_than:7d` },
+    { name: "hdfc", q: `(from:hdfcbank OR from:hdfc.com)${dateFilter}` },
+    { name: "hdfc_broad", q: `(from:hdfcbank OR from:hdfc.com OR subject:"HDFC Bank") newer_than:7d` },
     { name: "amazon", q: `(from:auto-confirm@amazon.in OR from:ship-confirm@amazon.in OR from:order-update@amazon.in OR from:returns@amazon.in OR (from:amazon.in (subject:refund OR subject:return OR subject:"Your order")))${dateFilter}` },
     { name: "amazon_7d", q: `from:amazon.in newer_than:7d` },
     { name: "swiggy_zomato", q: `((from:noreply@swiggy.in subject:order) OR (from:noreply@zomato.com subject:order))${dateFilter}` },
