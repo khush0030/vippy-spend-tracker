@@ -85,6 +85,39 @@ describe("parseDate", () => {
     assert.equal(parseDate("12/08/26"), "2026-08-12");
   });
 
+  test("reads month names, which is how a great many receipts print", () => {
+    assert.equal(parseDate("17-Aug-2026"), "2026-08-17");
+    assert.equal(parseDate("17 Aug 2026"), "2026-08-17");
+    assert.equal(parseDate("17 AUGUST 2026"), "2026-08-17");
+    assert.equal(parseDate("17.Sept.2026"), "2026-09-17");
+  });
+
+  test("reads a month name printed before the day", () => {
+    assert.equal(parseDate("Aug 17, 2026"), "2026-08-17");
+    assert.equal(parseDate("August 17 2026"), "2026-08-17");
+  });
+
+  test("reads the European languages the trip receipts arrive in", () => {
+    assert.equal(parseDate("17 août 2026"), "2026-08-17");      // fr
+    assert.equal(parseDate("17. Aug. 2026"), "2026-08-17");     // de
+    assert.equal(parseDate("17 ago 2026"), "2026-08-17");       // es/it
+    assert.equal(parseDate("17 aug 2026"), "2026-08-17");       // nl
+    assert.equal(parseDate("17. srpna 2026"), "2026-08-17");    // cs
+  });
+
+  test("a month name settles the order regardless of the country", () => {
+    assert.equal(parseDate("Aug 17, 2026", "US"), "2026-08-17");
+    assert.equal(parseDate("17 Aug 2026", "US"), "2026-08-17");
+  });
+
+  test("two-digit years work with month names too", () => {
+    assert.equal(parseDate("17-Aug-26"), "2026-08-17");
+  });
+
+  test("rejects a month name it does not know", () => {
+    assert.equal(parseDate("17 Smarch 2026"), null);
+  });
+
   test("returns null on nonsense rather than inventing a date", () => {
     assert.equal(parseDate("not a date"), null);
     assert.equal(parseDate("99/99/2026"), null);
