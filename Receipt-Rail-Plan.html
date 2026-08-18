@@ -1,0 +1,1369 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Receipt Rail — Implementation Plan</title>
+<style>
+@page { size: A4 portrait; margin: 0; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+:root{
+  --ink:#0f172a; --mid:#334155; --muted:#64748b; --faint:#94a3b8;
+  --line:#e2e8f0; --bg:#f8fafc;
+  --brand:#1e3a8a; --brand2:#3b82f6; --accent:#f59e0b;
+  --green:#059669; --red:#dc2626; --violet:#7c3aed; --teal:#0891b2; --pink:#db2777;
+}
+html,body{margin:0;padding:0;}
+body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--ink); font-size:9.6pt; line-height:1.45; }
+.page{ width:210mm; height:297mm; padding:15mm 14mm 12mm; position:relative;
+  page-break-after:always; overflow:hidden; background:#fff; }
+.page:last-child{page-break-after:auto;}
+.ph{ display:flex; justify-content:space-between; align-items:baseline;
+  border-bottom:2px solid var(--ink); padding-bottom:4px; margin-bottom:9mm; }
+.ph .n{ font-size:8pt; letter-spacing:.16em; text-transform:uppercase; color:var(--brand); font-weight:700;}
+.ph .t{ font-size:8pt; letter-spacing:.1em; text-transform:uppercase; color:var(--faint);}
+.pf{ position:absolute; left:14mm; right:14mm; bottom:7mm; display:flex; justify-content:space-between;
+  font-size:7.2pt; color:var(--faint); letter-spacing:.06em; border-top:1px solid var(--line); padding-top:4px;}
+h1{font-size:26pt; line-height:1.08; margin:0 0 6px; letter-spacing:-.02em;}
+h2{font-size:17pt; line-height:1.15; margin:0 0 10px; letter-spacing:-.015em;}
+h3{font-size:10.5pt; margin:0 0 5px; letter-spacing:-.005em;}
+h4{font-size:8pt; margin:0 0 4px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted);}
+p{margin:0 0 8px;} ul{margin:0 0 8px; padding-left:15px;} li{margin-bottom:3px;}
+.lead{font-size:11pt; color:var(--mid); line-height:1.5;}
+.small{font-size:8.2pt;} .tiny{font-size:7.4pt;}
+.mono{font-family:"SF Mono",Menlo,Consolas,monospace; font-size:8pt;}
+.muted{color:var(--muted);} .b{font-weight:700;}
+.grid{display:grid; gap:5mm;} .g2{grid-template-columns:1fr 1fr;} .g3{grid-template-columns:1fr 1fr 1fr;}
+.g4{grid-template-columns:repeat(4,1fr);} .g23{grid-template-columns:1.2fr 1fr;}
+.card{border:1px solid var(--line); border-radius:7px; padding:9px 11px; background:#fff;}
+.card.fill{background:var(--bg);}
+.card.brand{background:#eff6ff; border-color:#bfdbfe;}
+.card.warn{background:#fffbeb; border-color:#fde68a;}
+.card.good{background:#ecfdf5; border-color:#a7f3d0;}
+.card.bad{background:#fef2f2; border-color:#fecaca;}
+.tag{display:inline-block; font-size:7pt; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  padding:2px 6px; border-radius:4px; background:var(--ink); color:#fff;}
+.tag.a{background:var(--accent);} .tag.g{background:var(--green);} .tag.r{background:var(--red);}
+.tag.v{background:var(--violet);} .tag.t{background:var(--teal);} .tag.b2{background:var(--brand2);}
+.tag.o{background:#fff; color:var(--muted); border:1px solid var(--line);}
+table{width:100%; border-collapse:collapse; font-size:8.2pt;}
+th{text-align:left; font-size:7.2pt; text-transform:uppercase; letter-spacing:.1em; color:var(--muted);
+  border-bottom:1.5px solid var(--ink); padding:5px 6px;}
+td{padding:5px 6px; border-bottom:1px solid var(--line); vertical-align:top;}
+tr.alt td{background:var(--bg);}
+.kpi{border:1px solid var(--line); border-radius:7px; padding:9px; text-align:center; background:#fff;}
+.kpi .v{font-size:18pt; font-weight:800; letter-spacing:-.03em; line-height:1;}
+.kpi .l{font-size:7pt; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin-top:4px;}
+.step{display:flex; gap:8px; margin-bottom:7px;}
+.step .num{flex:0 0 20px; height:20px; border-radius:50%; background:var(--brand); color:#fff;
+  font-size:8.5pt; font-weight:700; display:flex; align-items:center; justify-content:center;}
+.arrow{text-align:center; color:var(--faint); font-size:12pt; line-height:1; margin:2px 0;}
+.box{border:1.5px solid var(--ink); border-radius:6px; padding:7px 9px; background:#fff;}
+.box .bt{font-size:8.5pt; font-weight:700;} .box .bd{font-size:7.4pt; color:var(--muted);}
+.chat{background:#e8eef5; border-radius:10px; padding:9px; }
+.bub{max-width:78%; padding:6px 9px; border-radius:12px; font-size:8pt; margin-bottom:6px; line-height:1.4;}
+.bub.in{background:#fff; border-bottom-left-radius:3px;}
+.bub.out{background:#d9fdd3; margin-left:auto; border-bottom-right-radius:3px;}
+.btnrow{display:flex; gap:4px; margin-top:5px; flex-wrap:wrap;}
+.tgbtn{flex:1; text-align:center; background:#fff; border:1px solid #b9cbe0; color:#2b6cb0;
+  border-radius:6px; padding:4px 5px; font-size:7.4pt; font-weight:600;}
+pre{background:#0f172a; color:#e2e8f0; border-radius:6px; padding:9px 11px; font-size:7.4pt;
+  line-height:1.5; overflow:hidden; font-family:"SF Mono",Menlo,Consolas,monospace; margin:0 0 8px;}
+pre .k{color:#93c5fd;} pre .s{color:#86efac;} pre .c{color:#64748b;} pre .n{color:#fcd34d;}
+.dense td{padding:3px 6px; font-size:7.8pt;} .dense th{padding:4px 6px;}
+.rule{height:1px; background:var(--line); margin:7px 0;}
+.pill{display:inline-block; padding:1px 7px; border-radius:99px; font-size:7.2pt; font-weight:600;
+  border:1px solid var(--line); background:var(--bg); color:var(--mid);}
+.legend{display:flex; gap:10px; flex-wrap:wrap; font-size:7.2pt; color:var(--muted);}
+.legend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:3px; vertical-align:-1px;}
+.newbadge{font-size:6.6pt; font-weight:800; letter-spacing:.1em; color:var(--accent);}
+.cover{display:flex; flex-direction:column; height:100%; padding:0;}
+</style></head><body>
+
+<!-- ============ COVER ============ -->
+<div class="page" style="padding:0;">
+  <div style="height:88mm; background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 55%,#3b82f6 100%); color:#fff; padding:18mm 14mm 0; position:relative;">
+    <div style="font-size:8pt; letter-spacing:.28em; text-transform:uppercase; opacity:.8;">VIP Industries Limited &nbsp;·&nbsp; Corporate Card Programme</div>
+    <div style="font-size:38pt; font-weight:800; letter-spacing:-.03em; line-height:1.02; margin-top:14mm;">Receipt&nbsp;Rail</div>
+    <div style="font-size:13pt; opacity:.92; margin-top:6px; max-width:130mm; line-height:1.35;">
+      A chat-first receipt capture, auto-reconciliation and statement-submission layer bolted onto Vippy Spend Tracker.</div>
+    <div style="position:absolute; bottom:9mm; left:14mm; font-size:8pt; letter-spacing:.14em; opacity:.75;">
+      IMPLEMENTATION PLAN &nbsp;·&nbsp; v1.0 &nbsp;·&nbsp; 18 Aug 2026</div>
+  </div>
+  <div style="padding:10mm 14mm 0;">
+    <div class="grid g3" style="margin-bottom:8mm;">
+      <div class="kpi"><div class="v" style="color:var(--red)">~45<span style="font-size:10pt">min</span></div><div class="l">Manual effort today, per cycle</div></div>
+      <div class="kpi"><div class="v" style="color:var(--green)">~3<span style="font-size:10pt">min</span></div><div class="l">After Receipt Rail</div></div>
+      <div class="kpi"><div class="v" style="color:var(--brand)">$2.30<span style="font-size:10pt">/mo</span></div><div class="l">Added running cost</div></div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <h4>The problem</h4>
+        <p class="small" style="margin:0">Physical invoices for the VIP Industries corporate card get lost between the purchase and the accounts department. Every statement cycle ends in a manual hunt: match paper to line items, scan, name files, email one by one.</p>
+      </div>
+      <div class="card brand">
+        <h4>The fix</h4>
+        <p class="small" style="margin:0">Photograph the bill the moment you get it and send it to a Telegram bot. It reads the bill, matches it to the exact card transaction already parsed from your HDFC email alerts, files it against the right statement cycle, and — on your approval — emails accounts one clean, indexed PDF bundle.</p>
+      </div>
+    </div>
+    <div class="rule" style="margin:7mm 0;"></div>
+    <h4>What this document covers</h4>
+    <table>
+      <tr><td style="width:16mm" class="mono b">01–03</td><td class="b">Concept &amp; system map</td><td class="muted">Before/after, full architecture, where it plugs into today's app</td></tr>
+      <tr class="alt"><td class="mono b">04–10</td><td class="b">The flows</td><td class="muted">Chat journey, ingest, extraction &amp; model cost, foreign currency, matching, trips &amp; backfill</td></tr>
+      <tr><td class="mono b">11–14</td><td class="b">The cycle</td><td class="muted">Statement cycle, reconciliation &amp; tie-out, the CSV package, delivery</td></tr>
+      <tr class="alt"><td class="mono b">15–18</td><td class="b">The build</td><td class="muted">Data model, API surface, tool stack &amp; cost, infrastructure options, security</td></tr>
+      <tr><td class="mono b">19–23</td><td class="b">Decisions</td><td class="muted">Telegram vs iMessage, phased roadmap, risks, what I need from you</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ============ 01 BEFORE / AFTER ============ -->
+<div class="page">
+  <div class="ph"><span class="n">01 · Concept</span><span class="t">Receipt Rail</span></div>
+  <h2>From paper chase to a two-second photo</h2>
+  <p class="lead" style="margin-bottom:8mm;">Nothing about how you spend changes. The only new habit is: <span class="b">snap the bill, send it to the bot.</span> Everything downstream is automatic.</p>
+
+  <div class="grid g2" style="margin-bottom:7mm;">
+    <div class="card bad">
+      <div class="tag r">Today</div>
+      <h3 style="margin-top:7px">Manual, lossy, month-end panic</h3>
+      <div class="step"><div class="num" style="background:var(--red)">1</div><div class="small">Swipe card. HDFC alert lands in Gmail. App parses it. <span class="b">Paper bill goes in a pocket.</span></div></div>
+      <div class="step"><div class="num" style="background:var(--red)">2</div><div class="small">Weeks pass. Bill is lost, faded, or in another jacket.</div></div>
+      <div class="step"><div class="num" style="background:var(--red)">3</div><div class="small">Statement arrives. You reconstruct 40+ line items from memory.</div></div>
+      <div class="step"><div class="num" style="background:var(--red)">4</div><div class="small">Scan whatever survived, rename files, write a covering mail.</div></div>
+      <div class="step"><div class="num" style="background:var(--red)">5</div><div class="small">Accounts replies asking which receipt belongs to which charge.</div></div>
+      <div class="rule"></div>
+      <div class="small"><span class="b">Failure rate:</span> receipts recovered only for the charges you happened to keep paper for.</div>
+    </div>
+    <div class="card good">
+      <div class="tag g">With Receipt Rail</div>
+      <h3 style="margin-top:7px">Capture at the point of spend</h3>
+      <div class="step"><div class="num" style="background:var(--green)">1</div><div class="small">Swipe card. HDFC alert lands in Gmail → app parses it (this already works).</div></div>
+      <div class="step"><div class="num" style="background:var(--green)">2</div><div class="small"><span class="b">Photo the bill → send to Telegram bot.</span> Takes 2 seconds at the counter.</div></div>
+      <div class="step"><div class="num" style="background:var(--green)">3</div><div class="small">Bot reads amount/date/merchant/GSTIN, matches it to the transaction, confirms in chat.</div></div>
+      <div class="step"><div class="num" style="background:var(--green)">4</div><div class="small">Daily nudge lists charges still missing a receipt so nothing rots until month-end.</div></div>
+      <div class="step"><div class="num" style="background:var(--green)">5</div><div class="small">Cycle closes → bot builds the bundle → you tap <span class="pill">Send to accounts</span> → done.</div></div>
+      <div class="rule"></div>
+      <div class="small"><span class="b">Failure mode is now visible:</span> anything unmatched is flagged and chased, not silently missing.</div>
+    </div>
+  </div>
+
+  <h4>The three jobs this layer does</h4>
+  <div class="grid g3">
+    <div class="card"><span class="tag b2">Job 1</span><h3 style="margin-top:6px">Capture</h3><p class="small" style="margin:0">Move the receipt off paper into durable storage the instant it exists, from whatever phone you're holding.</p></div>
+    <div class="card"><span class="tag v">Job 2</span><h3 style="margin-top:6px">Reconcile</h3><p class="small" style="margin:0">Bind each receipt to the exact card transaction — the hard part accounts actually cares about.</p></div>
+    <div class="card"><span class="tag a">Job 3</span><h3 style="margin-top:6px">Submit</h3><p class="small" style="margin:0">Package a statement cycle into one indexed, auditable PDF and deliver it with an approval gate.</p></div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>01</span></div>
+</div>
+<!-- ============ 02 SYSTEM MAP ============ -->
+<div class="page">
+  <div class="ph"><span class="n">02 · Architecture</span><span class="t">Full system map</span></div>
+  <h2>Every moving part, end to end</h2>
+  <div class="legend" style="margin-bottom:5mm;">
+    <span><i style="background:#cbd5e1"></i>Exists today</span>
+    <span><i style="background:#f59e0b"></i>New in Receipt Rail</span>
+    <span><i style="background:#3b82f6"></i>External service</span>
+    <span><i style="background:#059669"></i>Human action</span>
+  </div>
+
+<svg viewBox="0 0 760 700" width="100%" style="height:186mm">
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 z" fill="#64748b"/></marker>
+    <marker id="aro" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,1 L7,4 L0,7 z" fill="#f59e0b"/></marker>
+  </defs>
+  <style>
+    .lbl{font:600 11px -apple-system,Helvetica,sans-serif; fill:#0f172a}
+    .sub{font:9px -apple-system,Helvetica,sans-serif; fill:#64748b}
+    .cap{font:700 8px -apple-system,Helvetica,sans-serif; fill:#94a3b8; letter-spacing:1.4px}
+    .el{font:9px -apple-system,Helvetica,sans-serif; fill:#475569}
+    .old{fill:#f1f5f9; stroke:#cbd5e1; stroke-width:1.5}
+    .new{fill:#fffbeb; stroke:#f59e0b; stroke-width:1.5}
+    .ext{fill:#eff6ff; stroke:#3b82f6; stroke-width:1.5}
+    .hum{fill:#ecfdf5; stroke:#059669; stroke-width:1.5}
+    .ln{stroke:#94a3b8; stroke-width:1.4; fill:none; marker-end:url(#ar)}
+    .lno{stroke:#f59e0b; stroke-width:1.8; fill:none; marker-end:url(#aro)}
+  </style>
+
+  <!-- swim lane captions -->
+  <text class="cap" x="4" y="22">SOURCES</text>
+  <line x1="0" y1="30" x2="760" y2="30" stroke="#e2e8f0"/>
+  <text class="cap" x="4" y="182">INGEST · VERCEL FUNCTIONS</text>
+  <line x1="0" y1="190" x2="760" y2="190" stroke="#e2e8f0"/>
+  <text class="cap" x="4" y="392">INTELLIGENCE</text>
+  <line x1="0" y1="400" x2="760" y2="400" stroke="#e2e8f0"/>
+  <text class="cap" x="4" y="522">STORE · SUPABASE</text>
+  <line x1="0" y1="530" x2="760" y2="530" stroke="#e2e8f0"/>
+  <text class="cap" x="4" y="632">OUTPUT</text>
+  <line x1="0" y1="640" x2="760" y2="640" stroke="#e2e8f0"/>
+
+  <!-- sources -->
+  <rect class="hum" x="10" y="42" width="150" height="52" rx="7"/>
+  <text class="lbl" x="22" y="62">You · phone camera</text><text class="sub" x="22" y="78">photo of the paper bill</text>
+  <rect class="ext" x="180" y="42" width="150" height="52" rx="7"/>
+  <text class="lbl" x="192" y="62">Gmail</text><text class="sub" x="192" y="78">HDFC / Amazon / Swiggy alerts</text>
+  <rect class="ext" x="350" y="42" width="150" height="52" rx="7"/>
+  <text class="lbl" x="362" y="62">Vendor e-invoices</text><text class="sub" x="362" y="78">PDF forwarded to the bot</text>
+  <rect class="old" x="520" y="42" width="150" height="52" rx="7"/>
+  <text class="lbl" x="532" y="62">Vercel Cron</text><text class="sub" x="532" y="78">daily tick dispatcher</text>
+
+  <!-- ingest -->
+  <rect class="new" x="10" y="204" width="185" height="66" rx="7"/>
+  <text class="lbl" x="22" y="224">Telegram Bot API</text><text class="sub" x="22" y="240">webhook · secret-token verified</text>
+  <text class="sub" x="22" y="256">POST /api/telegram/webhook</text>
+  <rect class="new" x="212" y="204" width="185" height="66" rx="7"/>
+  <text class="lbl" x="224" y="224">Receipt ingest worker</text><text class="sub" x="224" y="240">getFile → download → sha256</text>
+  <text class="sub" x="224" y="256">dedupe · put to private bucket</text>
+  <rect class="old" x="414" y="204" width="160" height="66" rx="7"/>
+  <text class="lbl" x="426" y="224">lib/sync.js</text><text class="sub" x="426" y="240">Gmail fetch + Claude parse</text>
+  <text class="sub" x="426" y="256">already in production</text>
+  <rect class="new" x="590" y="204" width="160" height="66" rx="7"/>
+  <text class="lbl" x="602" y="224">Cycle &amp; nudge jobs</text><text class="sub" x="602" y="240">/api/cron/tick branches:</text>
+  <text class="sub" x="602" y="256">nudge · close · rematch</text>
+
+  <!-- intelligence -->
+  <rect class="ext" x="10" y="414" width="185" height="62" rx="7"/>
+  <text class="lbl" x="22" y="434">Claude vision extract</text><text class="sub" x="22" y="450">image → strict JSON</text>
+  <text class="sub" x="22" y="466">amount · date · merchant · GSTIN</text>
+  <rect class="new" x="212" y="414" width="185" height="62" rx="7"/>
+  <text class="lbl" x="224" y="434">Matching engine</text><text class="sub" x="224" y="450">weighted score vs candidates</text>
+  <text class="sub" x="224" y="466">auto-link · ask · defer</text>
+  <rect class="new" x="414" y="414" width="160" height="62" rx="7"/>
+  <text class="lbl" x="426" y="434">Coverage engine</text><text class="sub" x="426" y="450">per-cycle receipt coverage %</text>
+  <text class="sub" x="426" y="466">exception list builder</text>
+  <rect class="new" x="590" y="414" width="160" height="62" rx="7"/>
+  <text class="lbl" x="602" y="434">Bundle builder</text><text class="sub" x="602" y="450">pdfkit + pdf-lib</text>
+  <text class="sub" x="602" y="466">cover · index · receipt pages</text>
+
+  <!-- store -->
+  <rect class="old" x="10" y="544" width="140" height="58" rx="7"/>
+  <text class="lbl" x="22" y="564">transactions</text><text class="sub" x="22" y="580">+ receipt_id, receipt_status</text>
+  <rect class="new" x="166" y="544" width="140" height="58" rx="7"/>
+  <text class="lbl" x="178" y="564">receipts</text><text class="sub" x="178" y="580">extraction + match state</text>
+  <rect class="new" x="322" y="544" width="140" height="58" rx="7"/>
+  <text class="lbl" x="334" y="564">statement_cycles</text><text class="sub" x="334" y="580">card_accounts · submissions</text>
+  <rect class="new" x="478" y="544" width="130" height="58" rx="7"/>
+  <text class="lbl" x="490" y="564">Storage bucket</text><text class="sub" x="490" y="580">private · signed URLs</text>
+  <rect class="old" x="624" y="544" width="126" height="58" rx="7"/>
+  <text class="lbl" x="636" y="564">app_logs</text><text class="sub" x="636" y="580">audit trail</text>
+
+  <!-- output -->
+  <rect class="new" x="10" y="654" width="176" height="40" rx="7"/>
+  <text class="lbl" x="22" y="678">Telegram replies &amp; nudges</text>
+  <rect class="ext" x="202" y="654" width="176" height="40" rx="7"/>
+  <text class="lbl" x="214" y="672">Resend → accounts@</text><text class="sub" x="214" y="686">bundle PDF + CSV attached</text>
+  <rect class="new" x="394" y="654" width="176" height="40" rx="7"/>
+  <text class="lbl" x="406" y="678">Dashboard · Receipts tab</text>
+  <rect class="old" x="586" y="654" width="164" height="40" rx="7"/>
+  <text class="lbl" x="598" y="672">Monthly report PDF</text><text class="sub" x="598" y="686">existing cron, unchanged</text>
+
+  <!-- flows -->
+  <path class="lno" d="M85,94 L85,200"/>
+  <path class="ln" d="M255,94 L255,150 L494,150 L494,200"/>
+  <path class="ln" d="M425,94 L425,130 L105,130 L105,200"/>
+  <path class="ln" d="M595,94 L640,94 L640,200"/>
+  <path class="lno" d="M195,237 L208,237"/>
+  <path class="lno" d="M300,270 L300,330 L100,330 L100,410"/>
+  <path class="lno" d="M105,476 L105,500 L290,500 L290,410"/>
+  <path class="ln" d="M494,270 L494,500 L80,500 L80,540" stroke-dasharray="3 3"/>
+  <path class="lno" d="M304,476 L304,540"/>
+  <path class="lno" d="M290,476 L290,510 L80,510 L80,540"/>
+  <path class="ln" d="M660,270 L660,410"/>
+  <path class="ln" d="M494,414 L494,340 L660,340" stroke-dasharray="3 3"/>
+  <path class="lno" d="M670,476 L670,540"/>
+  <path class="lno" d="M545,602 L545,650"/>
+  <path class="lno" d="M236,602 L236,624 L98,624 L98,650"/>
+  <path class="lno" d="M392,602 L392,624 L290,624 L290,650"/>
+  <path class="lno" d="M392,602 L392,624 L482,624 L482,650"/>
+  <text class="el" x="92" y="124">receipt image</text>
+  <text class="el" x="262" y="124">alerts</text>
+  <text class="el" x="312" y="325">extract</text>
+  <text class="el" x="112" y="497">candidates</text>
+</svg>
+
+  <div class="grid g3" style="margin-top:4mm">
+    <div class="card small"><span class="b">One new front door.</span> Telegram webhook is the only public surface added; it is authenticated by a secret header and a chat-ID allowlist.</div>
+    <div class="card small"><span class="b">Reuses the existing brain.</span> Transactions still come from Gmail + Claude exactly as they do now. Receipt Rail never re-parses bank mail.</div>
+    <div class="card small"><span class="b">Two-way street.</span> The bot both receives receipts and pushes reminders back, which is what actually kills the month-end scramble.</div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>02</span></div>
+</div>
+
+<!-- ============ 03 FIT WITH EXISTING APP ============ -->
+<div class="page">
+  <div class="ph"><span class="n">03 · Fit</span><span class="t">What changes in the current codebase</span></div>
+  <h2>Bolt-on, not rewrite</h2>
+  <p class="lead" style="margin-bottom:6mm;">Receipt Rail is additive. Existing sync, dashboard, reports and the monthly-report cron keep working untouched. Below is the honest diff against the repo as it stands.</p>
+
+  <table style="margin-bottom:6mm">
+    <thead><tr><th style="width:52mm">Existing file</th><th style="width:24mm">Verdict</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">lib/sync.js</td><td><span class="pill" style="border-color:#a7f3d0;background:#ecfdf5">1 hook added</span></td><td>After a successful insert batch, fire <span class="mono">rematchPendingReceipts(userId)</span> so receipts that arrived <span class="b">before</span> the bank email get bound the moment the transaction appears.</td></tr>
+      <tr class="alt"><td class="mono">lib/gmail.js</td><td><span class="pill">untouched</span></td><td>No change. Same queries, same parsing.</td></tr>
+      <tr><td class="mono">lib/report-pdf.js</td><td><span class="pill" style="border-color:#fde68a;background:#fffbeb">pattern reused</span></td><td>The pdfkit + QuickChart approach is copied into a new <span class="mono">lib/bundle-pdf.js</span>. The monthly report itself is unchanged.</td></tr>
+      <tr class="alt"><td class="mono">lib/monthly-report.js</td><td><span class="pill" style="border-color:#fde68a;background:#fffbeb">pattern reused</span></td><td>Resend delivery pattern copied into <span class="mono">lib/submission-mail.js</span>, with an approval gate in front of it.</td></tr>
+      <tr><td class="mono">lib/supabase.js</td><td><span class="pill" style="border-color:#fecaca;background:#fef2f2">must extend</span></td><td>Today it only builds an <span class="b">anon-key</span> client. Storage writes and cross-user cron work need a second <span class="mono">getSupabaseAdmin()</span> using <span class="mono">SUPABASE_SERVICE_ROLE_KEY</span>, server-only.</td></tr>
+      <tr class="alt"><td class="mono">lib/logger.js</td><td><span class="pill">untouched</span></td><td>Reused as-is with new sources: <span class="mono">telegram</span>, <span class="mono">receipt</span>, <span class="mono">match</span>, <span class="mono">submission</span>.</td></tr>
+      <tr><td class="mono">transactions table</td><td><span class="pill" style="border-color:#a7f3d0;background:#ecfdf5">3 columns</span></td><td><span class="mono">receipt_id</span>, <span class="mono">receipt_status</span>, <span class="mono">declared_reason</span>. The legacy <span class="mono">has_receipt</span> boolean becomes a generated view of <span class="mono">receipt_status</span>.</td></tr>
+      <tr class="alt"><td class="mono">app/page.js + tabs</td><td><span class="pill" style="border-color:#a7f3d0;background:#ecfdf5">1 new tab</span></td><td>Receipts tab returns — but as a reconciliation console, not the old checkbox UI that was removed in <span class="mono">3e26a4f</span>.</td></tr>
+      <tr><td class="mono">vercel.json crons</td><td><span class="pill" style="border-color:#fecaca;background:#fef2f2">consolidate</span></td><td>Two cron slots are already used. See the constraint below.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid g2" style="margin-bottom:6mm">
+    <div class="card warn">
+      <h4>Constraint · cron slots</h4>
+      <p class="small" style="margin:0">Vercel's Hobby plan caps you at <span class="b">2 cron jobs, once-daily</span>. <span class="mono">/api/cron/sync</span> and <span class="mono">/api/cron/monthly-report</span> already occupy both. Receipt Rail needs three more schedules.</p>
+      <div class="rule"></div>
+      <p class="small" style="margin:0"><span class="b">Fix without upgrading:</span> replace both entries with one <span class="mono">/api/cron/tick</span> dispatcher that runs daily and branches on the date — sync and nudge always, statement reconciliation on the 18th, submission build on the 23rd. One slot, five jobs, and every job stays independently testable via <span class="mono">?job=</span>.</p>
+    </div>
+    <div class="card bad">
+      <h4>Constraint · Supabase key</h4>
+      <p class="small" style="margin:0">The app currently ships only <span class="mono">SUPABASE_ANON_KEY</span>. A private receipts bucket cannot be written with the anon key under sane RLS, and the cron already reads <span class="b">all</span> users' rows — which today works only because RLS is effectively open.</p>
+      <div class="rule"></div>
+      <p class="small" style="margin:0"><span class="b">Do this in Phase 0:</span> add <span class="mono">SUPABASE_SERVICE_ROLE_KEY</span> (server env only, never <span class="mono">NEXT_PUBLIC_</span>), turn RLS on for <span class="mono">receipts</span>/<span class="mono">submissions</span>, and route all storage + cron writes through the admin client.</p>
+    </div>
+  </div>
+
+  <h4>New files</h4>
+  <div class="grid g2">
+    <div class="card fill mono tiny" style="line-height:1.7">
+app/api/telegram/webhook/route.js<br>
+app/api/receipts/route.js<br>
+app/api/receipts/[id]/match/route.js<br>
+app/api/cycles/route.js<br>
+app/api/submissions/route.js<br>
+app/api/submissions/[id]/send/route.js<br>
+app/api/cron/tick/route.js
+    </div>
+    <div class="card fill mono tiny" style="line-height:1.7">
+lib/telegram.js &nbsp;<span style="color:#64748b">// send, edit, getFile, keyboards</span><br>
+lib/receipt-vision.js <span style="color:#64748b">// Claude image → JSON</span><br>
+lib/matcher.js &nbsp;&nbsp;<span style="color:#64748b">// scoring + decisions</span><br>
+lib/cycles.js &nbsp;&nbsp;&nbsp;<span style="color:#64748b">// statement windows</span><br>
+lib/bundle-pdf.js <span style="color:#64748b">// submission bundle</span><br>
+lib/submission-mail.js<br>
+app/components/receipts/ReceiptsTab.jsx
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>03</span></div>
+</div>
+<!-- ============ 04 CHAT JOURNEY ============ -->
+<div class="page">
+  <div class="ph"><span class="n">04 · Experience</span><span class="t">What it actually feels like</span></div>
+  <h2>The whole product, in four conversations</h2>
+
+  <div class="grid g2" style="margin-bottom:4mm">
+    <div>
+      <h4>A · One-time linking</h4>
+      <div class="chat" style="min-height:56mm">
+        <div class="bub out">/start VIP-7K42</div>
+        <div class="bub in"><span class="b">Linked.</span> 👋 Khush — VIP Industries corporate card ••4821.<br><br>Send me a photo of any bill and I'll file it against the right charge. Type /help anytime.</div>
+        <div class="bub in" style="background:#fff7ed">Cycle open: <span class="b">4 Aug → 3 Sep</span><br>18 charges · ₹1,42,380 · 11 receipts on file (61%)</div>
+      </div>
+      <p class="tiny muted" style="margin-top:4px">Code is generated in Settings → Receipt Bot. It binds your Telegram chat ID to your user_id. Nobody else's chat can talk to the bot.</p>
+    </div>
+    <div>
+      <h4>B · The happy path</h4>
+      <div class="chat">
+        <div class="bub out" style="padding:0;overflow:hidden">
+          <div style="height:17mm;background:linear-gradient(160deg,#cbd5e1,#94a3b8);display:flex;align-items:center;justify-content:center;font-size:8pt;color:#fff">📄 IMG_4821.jpg</div>
+        </div>
+        <div class="bub in">Reading…</div>
+        <div class="bub in"><span class="b">✅ Matched · 96</span><br>Indian Oil · ₹3,400.00 · 12 Aug, 18:42<br>→ Txn #2841 <span class="mono tiny">HDFC ••4821 · IOCL PETROL</span><br>GSTIN 27AAACI1681G1ZN · Inv 5512
+          <div class="btnrow"><div class="tgbtn">↩︎ Wrong match</div><div class="tgbtn">🏷 Change category</div></div></div>
+      </div>
+      <p class="tiny muted" style="margin-top:3px">Score ≥ 75 with a clear gap to the runner-up → auto-linked, undo always available.</p>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div>
+      <h4>C · Ambiguity — the bot asks instead of guessing</h4>
+      <div class="chat">
+        <div class="bub out" style="padding:0;overflow:hidden">
+          <div style="height:13mm;background:linear-gradient(160deg,#e2e8f0,#cbd5e1);display:flex;align-items:center;justify-content:center;font-size:8pt;color:#64748b">📄 restaurant bill · ₹2,480</div>
+        </div>
+        <div class="bub in"><span class="b">🤔 Two charges fit</span> — ₹2,480 on 09 Aug.
+          <div class="btnrow" style="flex-direction:column">
+            <div class="tgbtn" style="text-align:left">1 · 09 Aug 21:14 · SOCIAL OFFLINE · ₹2,480 <span class="muted">(88)</span></div>
+            <div class="tgbtn" style="text-align:left">2 · 09 Aug 21:19 · SWIGGY · ₹2,480 <span class="muted">(74)</span></div>
+            <div class="tgbtn" style="text-align:left">✳︎ None of these — hold it</div>
+          </div>
+        </div>
+        <div class="bub out">1</div>
+        <div class="bub in">Filed against Txn #2803. 👍</div>
+      </div>
+    </div>
+    <div>
+      <h4>D · The nudge that ends month-end panic</h4>
+      <div class="chat">
+        <div class="bub in"><span class="b">📌 Daily check · 6 charges without a receipt</span><br>
+          <span class="mono tiny">14 Aug · Taj Santacruz · ₹8,940</span><br>
+          <span class="mono tiny">13 Aug · Indigo &nbsp;· ₹12,300</span><br>
+          <span class="mono tiny">11 Aug · Croma &nbsp;&nbsp;· ₹4,199</span><br>
+          <span class="muted tiny">+3 more under ₹500 (auto-waived)</span>
+          <div class="btnrow"><div class="tgbtn">📎 Send now</div><div class="tgbtn">🚫 No bill exists</div><div class="tgbtn">⏰ Remind tomorrow</div></div>
+        </div>
+        <div class="bub in" style="background:#fff7ed"><span class="b">⏳ Cycle closes in 3 days.</span> Coverage 78%. Tap /submit when ready — I'll build the bundle for your approval first.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule" style="margin:4mm 0"></div>
+  <h4>Command surface</h4>
+  <table>
+    <tr><td class="mono b" style="width:30mm">/start &lt;code&gt;</td><td>Link this chat to your dashboard account</td><td class="mono b" style="width:30mm">/status</td><td>Current cycle coverage + totals</td></tr>
+    <tr class="alt"><td class="mono b">/missing</td><td>List charges still lacking a receipt</td><td class="mono b">/unmatched</td><td>Receipts waiting for a transaction</td></tr>
+    <tr><td class="mono b">/submit</td><td>Build the bundle and preview it here</td><td class="mono b">/last</td><td>Show + undo the last match</td></tr>
+    <tr class="alt"><td class="mono b">/note &lt;text&gt;</td><td>Attach a business-purpose note to the last receipt</td><td class="mono b">/help</td><td>Command list</td></tr>
+  </table>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>04</span></div>
+</div>
+
+<!-- ============ 05 INGEST PIPELINE ============ -->
+<div class="page">
+  <div class="ph"><span class="n">05 · Pipeline</span><span class="t">Photo → durable, deduped, private object</span></div>
+  <h2>Ingest, step by step</h2>
+  <p class="lead" style="margin-bottom:6mm">Telegram's webhook must be answered in under a few seconds or it retries. So the webhook does the cheap work and acknowledges immediately; the expensive work runs after the response is queued.</p>
+
+  <div class="grid" style="grid-template-columns:1fr; gap:0">
+    <div class="grid g4" style="gap:4mm">
+      <div class="box"><span class="tag b2">01</span><div class="bt" style="margin-top:5px">Verify</div><div class="bd">Compare <span class="mono">X-Telegram-Bot-Api-Secret-Token</span> against env. Reject unknown <span class="mono">chat_id</span>. Drop duplicate <span class="mono">update_id</span>.</div></div>
+      <div class="box"><span class="tag b2">02</span><div class="bt" style="margin-top:5px">Classify</div><div class="bd">photo · document (PDF/JPG/PNG/HEIC) · text command · button callback · forwarded e-invoice.</div></div>
+      <div class="box"><span class="tag b2">03</span><div class="bt" style="margin-top:5px">Ack fast</div><div class="bd">Reply "Reading…" and return <span class="mono">200</span>. Telegram is satisfied; work continues.</div></div>
+      <div class="box"><span class="tag b2">04</span><div class="bt" style="margin-top:5px">Fetch bytes</div><div class="bd"><span class="mono">getFile</span> → <span class="mono">api.telegram.org/file/bot&lt;token&gt;/&lt;path&gt;</span>. Cap 20 MB (bot API limit).</div></div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="grid g4" style="gap:4mm">
+      <div class="box"><span class="tag v">05</span><div class="bt" style="margin-top:5px">Fingerprint</div><div class="bd">SHA-256 of bytes. Unique index on <span class="mono">(user_id, sha256)</span> — re-sending the same photo returns the original match instead of a duplicate.</div></div>
+      <div class="box"><span class="tag v">06</span><div class="bt" style="margin-top:5px">Normalise</div><div class="bd">HEIC/PDF → JPEG page images for the vision call. Keep the original file untouched for the audit trail.</div></div>
+      <div class="box"><span class="tag v">07</span><div class="bt" style="margin-top:5px">Store</div><div class="bd">Private bucket <span class="mono">receipts/</span><br><span class="mono tiny">{user_id}/{YYYY}/{MM}/{uuid}.jpg</span><br>Access only via short-lived signed URLs.</div></div>
+      <div class="box"><span class="tag v">08</span><div class="bt" style="margin-top:5px">Row</div><div class="bd">Insert <span class="mono">receipts</span> row, <span class="mono">status='pending'</span>, with Telegram message id so the bot can edit its own reply in place.</div></div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="grid g3" style="gap:4mm">
+      <div class="box" style="border-color:var(--accent)"><span class="tag a">09</span><div class="bt" style="margin-top:5px">Extract</div><div class="bd">Claude vision → strict JSON (next page). Store the raw response in <span class="mono">extracted jsonb</span> — never throw away what the model saw.</div></div>
+      <div class="box" style="border-color:var(--accent)"><span class="tag a">10</span><div class="bt" style="margin-top:5px">Match</div><div class="bd">Score against candidate transactions, decide auto / ask / defer (page 09).</div></div>
+      <div class="box" style="border-color:var(--accent)"><span class="tag a">11</span><div class="bt" style="margin-top:5px">Reply</div><div class="bd">Edit the "Reading…" message into the result card with inline buttons. One message per receipt — chat stays clean.</div></div>
+    </div>
+  </div>
+
+  <div class="rule" style="margin:6mm 0"></div>
+  <div class="grid g23">
+    <div>
+      <h4>Failure handling — every branch has a defined end state</h4>
+      <table>
+        <thead><tr><th>Failure</th><th>Behaviour</th></tr></thead>
+        <tr><td>Vision call errors / rate-limited</td><td>Exponential backoff, 3 tries; then row stays <span class="mono">pending</span> and the daily job retries. Chat says "couldn't read it — I'll retry".</td></tr>
+        <tr class="alt"><td>Image unreadable / not a bill</td><td><span class="mono">doc_type='other'</span> → bot asks "Is this a receipt? Enter amount + date manually" with a modal-style prompt.</td></tr>
+        <tr><td>Zero candidate transactions</td><td><span class="mono">status='unmatched'</span> → parked in the deferred pool, retried after every Gmail sync for 30 days.</td></tr>
+        <tr class="alt"><td>File &gt; 20 MB</td><td>Rejected with instructions to send as a photo, not an uncompressed document.</td></tr>
+        <tr><td>Webhook retried by Telegram</td><td><span class="mono">update_id</span> dedupe table makes the whole handler idempotent.</td></tr>
+      </table>
+    </div>
+    <div class="card fill">
+      <h4>Why not just email receipts to the app?</h4>
+      <p class="small">You could forward bills to a Gmail alias and let the existing sync pick them up. It fails on the thing that matters: <span class="b">no feedback loop.</span> Email can't tell you "this didn't match, pick one of these two" in the two seconds you're still standing at the counter, and it can't nudge you at 8pm about the three charges still bare.</p>
+      <p class="small" style="margin:0">Chat is the right medium because reconciliation is a <span class="b">conversation</span>, not a drop-box.</p>
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>05</span></div>
+</div>
+
+<!-- ============ 06 VISION ============ -->
+<div class="page">
+  <div class="ph"><span class="n">06 · Extraction</span><span class="t">Claude vision → structured receipt</span></div>
+  <h2>Reading the bill</h2>
+  <p class="lead" style="margin-bottom:5mm">Same provider you already pay for (<span class="mono">@anthropic-ai/sdk</span> is in <span class="mono">package.json</span>), same discipline as <span class="mono">lib/sync.js</span>: a strict system prompt, JSON-only output, and a deterministic safety net over the model's answer.</p>
+
+  <div class="grid g23" style="margin-bottom:5mm">
+    <div>
+      <h4>Output contract</h4>
+      <pre><span class="c">// lib/receipt-vision.js → extractReceipt(buf)</span>
+{
+  <span class="k">"doc_type"</span>: <span class="s">"tax_invoice"</span>,   <span class="c">// invoice|pos_slip|e_invoice|other</span>
+  <span class="k">"merchant"</span>: <span class="s">"Indian Oil Corporation"</span>,
+  <span class="k">"merchant_raw"</span>: <span class="s">"IOCL RETAIL OUTLET, ANDHERI E"</span>,
+  <span class="k">"total"</span>: <span class="n">3400.00</span>,
+  <span class="k">"subtotal"</span>: <span class="n">2881.36</span>,
+  <span class="k">"tax_total"</span>: <span class="n">518.64</span>,
+  <span class="k">"currency"</span>: <span class="s">"INR"</span>,
+  <span class="k">"date"</span>: <span class="s">"2026-08-12"</span>,
+  <span class="k">"time"</span>: <span class="s">"18:42"</span>,
+  <span class="k">"invoice_no"</span>: <span class="s">"5512"</span>,
+  <span class="k">"gstin"</span>: <span class="s">"27AAACI1681G1ZN"</span>,
+  <span class="k">"payment_mode"</span>: <span class="s">"card"</span>,
+  <span class="k">"card_last4"</span>: <span class="s">"4821"</span>,
+  <span class="k">"line_items"</span>: [{ <span class="k">"desc"</span>:<span class="s">"XP95 Petrol 34.2L"</span>, <span class="k">"amount"</span>:<span class="n">3400</span> }],
+  <span class="k">"confidence"</span>: <span class="n">0.94</span>,
+  <span class="k">"unreadable_fields"</span>: []
+}</pre>
+    </div>
+    <div>
+      <h4>Prompt rules that earn their keep</h4>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Total ≠ subtotal.</span> Always return the <span class="b">amount actually charged to the card</span> — the grand total after tax, tip and rounding. That is the only number the bank alert will agree with.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Never invent.</span> Anything illegible goes in <span class="mono">unreadable_fields</span> and stays <span class="mono">null</span>. A null the bot asks about is cheap; a hallucinated GSTIN in a filing is not.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Indian formats.</span> DD/MM/YYYY, lakh/crore digit grouping, "Rs."/"₹"/"INR", GSTIN regex validation, CGST+SGST split.</div>
+      <div class="card small" style="margin:0"><span class="b">Card tail is gold.</span> If the slip prints the last 4 digits, extraction confidence and match score both jump — it proves the bill belongs to the <span class="b">company</span> card, not your personal one.</div>
+    </div>
+  </div>
+
+  <h4>Deterministic safety net after the model returns</h4>
+  <div class="grid g4" style="margin-bottom:5mm">
+    <div class="card small"><span class="b">Arithmetic check</span><br>subtotal + tax ≈ total (±₹1) else drop confidence 0.2</div>
+    <div class="card small"><span class="b">GSTIN checksum</span><br>15-char format + state code validation; invalid → null it</div>
+    <div class="card small"><span class="b">Date sanity</span><br>Future dates or &gt;120 days old → flag for confirmation</div>
+    <div class="card small"><span class="b">Currency guard</span><br>Non-INR → convert flag raised, never silently matched</div>
+  </div>
+
+  <div class="card fill small"><span class="b">Where the model choice lands:</span> accuracy is the priority, so every receipt is read <span class="b">twice by two different model families</span> and conflicts are adjudicated by a third. Full strategy and costs on the next page.</div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>06</span></div>
+</div>
+
+<!-- ============ MODEL COST ============ -->
+<div class="page">
+  <div class="ph"><span class="n">07 · Accuracy</span><span class="t">Model strategy when errors are unacceptable</span></div>
+  <h2>You can't buy 100% from a model. You can engineer it.</h2>
+  <div class="card bad small" style="margin-bottom:3mm"><span class="b">The honest position.</span> No vision model returns 100% on creased thermal slips, faded ink and handwritten tips — not Claude, not GPT, not a dedicated OCR service. Anyone quoting 100% is quoting a benchmark, not your shoebox. <span class="b">But 100% accuracy at the point of submission is achievable</span>, because every rupee in the package is checked against HDFC's own statement and anything that doesn't reconcile blocks the send. Accuracy is a property of the <span class="b">pipeline</span>, not the model.</div>
+
+  <h4>Four layers, each catching what the one before it missed</h4>
+  <div class="grid g4" style="margin-bottom:4mm">
+    <div class="box" style="border-color:var(--brand)"><span class="tag b2">L1</span><div class="bt" style="margin-top:5px">Two models, independently</div><div class="bd">Every receipt read by <span class="b">Sonnet 5</span> and <span class="b">GPT-5.6 Terra</span> in parallel. Agreement on total + date + merchant is strong evidence; disagreement is a flag, not a coin toss.</div></div>
+    <div class="box" style="border-color:var(--violet)"><span class="tag v">L2</span><div class="bt" style="margin-top:5px">Tiebreak on conflict</div><div class="bd">They disagree → <span class="b">Opus 5</span> adjudicates. Fires on ~15% of receipts, so the flagship price is paid only where it earns its keep.</div></div>
+    <div class="box" style="border-color:var(--accent)"><span class="tag a">L3</span><div class="bt" style="margin-top:5px">Deterministic checks</div><div class="bd">Arithmetic tie-out, GSTIN/VAT checksum, currency sanity, date plausibility. Code, not a model — it never has an off day.</div></div>
+    <div class="box" style="border-color:var(--green)"><span class="tag g">L4</span><div class="bt" style="margin-top:5px">The statement</div><div class="bd"><span class="b">The real guarantee.</span> Every amount must equal a line on HDFC's statement. Misread ₹3,400 as ₹8,400 and no statement line matches — the cycle blocks, the discrepancy is named in chat, you fix it in one tap.</div></div>
+  </div>
+  <div class="card good small" style="margin-bottom:3mm"><span class="b">The bank is the ground truth, and nothing reaches accounts without agreeing with it to the rupee.</span> That is a stronger promise than any model benchmark — and it is the layer that actually delivers what you asked for.</div>
+
+  <h4>What each option costs — accuracy-first, cheap-second</h4>
+  <table class="dense" style="margin-bottom:3mm">
+    <thead><tr><th style="width:40mm">Model</th><th style="width:26mm">$/MTok in·out</th><th style="width:20mm">Per receipt</th><th>Role in this design</th></tr></thead>
+    <tr><td class="b">Claude Sonnet 5 <span class="tag g" style="margin-left:3px">PRIMARY A</span></td><td class="mono">$2 · $10</td><td class="b">$0.0078</td><td>Strongest structured extraction at this tier; already integrated.</td></tr>
+    <tr class="alt"><td class="b">GPT-5.6 Terra <span class="tag b2" style="margin-left:3px">PRIMARY B</span></td><td class="mono">$2 · $12</td><td class="b">$0.0084</td><td>Independent second read on your existing OpenAI key. A <span class="b">different</span> model family is the point — correlated errors defeat consensus.</td></tr>
+    <tr><td class="b">Claude Opus 5 <span class="tag v" style="margin-left:3px">TIEBREAK</span></td><td class="mono">$5 · $25</td><td class="b">$0.019</td><td>Adjudicates disagreements only, ~15% of receipts.</td></tr>
+    <tr class="alt"><td class="b">Sarvam Vision <span class="tag t" style="margin-left:3px">SPECIALIST</span></td><td class="mono">₹0.50 / page</td><td class="b">$0.0057</td><td>Third opinion on <span class="b">handwritten or Indic-script</span> Indian slips. No European languages.</td></tr>
+    <tr><td class="muted">Luna · Nano · Flash-Lite</td><td class="mono">$0.20–0.25 in</td><td class="muted">$0.0009</td><td class="muted">Cheapest on the board, and OpenAI's small tier genuinely undercuts Anthropic's — but a single cheap read is exactly the trade you told me not to make. Kept only as failover if a provider is down.</td></tr>
+    <tr class="alt"><td class="muted">Mistral OCR 4 / Document AI</td><td class="mono">$4–30 / 1k pages</td><td class="muted">$0.004–0.03</td><td class="muted">OCR only — still needs a model on top, adding cost and a failure point without adding accuracy.</td></tr>
+  </table>
+
+  <div class="grid g23">
+    <div class="card brand">
+      <h4>The bill for insisting on accuracy</h4>
+      <table class="dense small">
+        <tr><td>Sonnet 5 · every receipt</td><td class="b" style="text-align:right">$0.0078</td></tr>
+        <tr class="alt"><td>GPT-5.6 Terra · every receipt</td><td class="b" style="text-align:right">$0.0084</td></tr>
+        <tr><td>Opus 5 · ~15% tiebreak</td><td class="b" style="text-align:right">$0.0029</td></tr>
+        <tr class="alt"><td class="b">Per receipt</td><td class="b" style="text-align:right">$0.019</td></tr>
+        <tr><td class="b">120 receipts / month</td><td class="b" style="text-align:right; color:var(--green)">≈ $2.30</td></tr>
+      </table>
+      <p class="small" style="margin:5px 0 0"><span class="b">₹200 a month</span> to read everything twice and adjudicate every conflict — about ₹190 more than a single cheap read. One wrong figure reaching accounts costs more than a year of that difference, in credibility rather than time.</p>
+      <p class="tiny muted" style="margin:4px 0 0"><span class="b">Verify on day one:</span> run 20 real bills through both models, record the agreement rate, then tune routing on that data rather than this table.</p>
+    </div>
+    <div>
+      <h4>Two decisions worth stating plainly</h4>
+      <div class="card small" style="margin-bottom:2mm"><span class="b">You already hold both keys.</span> OpenAI is genuinely cheaper at the small-model tier — Luna's $0.20/$1.20 undercuts everything. At the <span class="b">flagship</span> tier it reverses: Terra's $2/$12 is marginally dearer than Sonnet 5's $2/$10. Using both anyway, price stops deciding and consensus becomes the point.</div>
+      <div class="card small" style="margin-bottom:2mm"><span class="b">Leave <span class="mono">lib/sync.js</span> alone.</span> Its prompt is tuned in production for refund detection, merchant canonicalisation and dedupe. Swapping models to consolidate providers buys nothing and risks a missed refund landing in a submission — and split providers mean one outage cannot stop the pipeline.</div>
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>07</span></div>
+</div>
+
+<!-- ============ INTERNATIONAL ============ -->
+<div class="page">
+  <div class="ph"><span class="n">08 · Global</span><span class="t">Foreign currency &amp; non-Indian receipts</span></div>
+  <h2>Your Europe trip breaks naive matching — here's the fix</h2>
+  <div class="card bad small" style="margin-bottom:4mm"><span class="b">The core problem.</span> A €48.50 dinner in Lisbon does not appear on your HDFC alert as €48.50, or as any round conversion of it. It appears as <span class="b">₹4,7xx</span> — Visa's wholesale rate, plus HDFC's ~3.5% foreign-currency markup, plus 18% GST on that markup, posted <span class="b">1–3 days later</span> than the date printed on the bill. Exact-amount matching, which is 40 of the 100 match points, fails on <span class="b">every single one</span> of your ~20 European receipts.</p></div>
+
+  <div class="grid g23" style="margin-bottom:4mm">
+    <div>
+      <h4>How a foreign charge is reconstructed</h4>
+      <div class="grid g2" style="gap:3mm">
+        <div class="box"><span class="tag t">1</span><div class="bt" style="margin-top:4px">Extract in origin currency</div><div class="bd">Model returns <span class="mono">total: 48.50</span>, <span class="mono">currency: "EUR"</span>, <span class="mono">country: "PT"</span> — never converted by the model.</div></div>
+        <div class="box"><span class="tag t">2</span><div class="bt" style="margin-top:4px">Fetch the day's rate</div><div class="bd">ECB daily reference rate for the receipt date via <span class="mono">Frankfurter</span> — free, no key. Cached in <span class="mono">fx_rates</span>, fetched once per currency-day.</div></div>
+        <div class="box"><span class="tag t">3</span><div class="bt" style="margin-top:4px">Model the markup band</div><div class="bd">expected₹ = €48.50 × rate × <span class="mono">[1.000 … 1.060]</span><br>network spread ~0.5–1% + markup 3.5% + 18% GST on markup.</div></div>
+        <div class="box"><span class="tag t">4</span><div class="bt" style="margin-top:4px">Score against the band</div><div class="bd">Inside band → full amount points. Within 1.5% outside → partial. The learned markup for your card tightens the band over time.</div></div>
+      </div>
+      <div class="card fill small" style="margin-top:3mm"><span class="b">Worked example.</span> €48.50 · 12 Jun · ECB EURINR 94.10 → base ₹4,563. Band ₹4,563–₹4,837. HDFC posts <span class="b">₹4,751</span> on 14 Jun → inside band at +4.1%, which is exactly the expected markup. Amount points awarded, and ₹4,751 — the amount actually charged — is what goes to accounts. The euro figure is shown alongside as evidence only.</div>
+    </div>
+    <div>
+      <h4>Rescoring for foreign receipts</h4>
+      <table class="dense small">
+        <thead><tr><th>Signal</th><th style="text-align:right">INR</th><th style="text-align:right">Foreign</th></tr></thead>
+        <tr><td>Amount</td><td style="text-align:right">40</td><td style="text-align:right" class="b">30</td></tr>
+        <tr class="alt"><td>Date <span class="muted tiny">(window)</span></td><td style="text-align:right">25 <span class="muted tiny">±7d</span></td><td style="text-align:right" class="b">20 <span class="muted tiny">−1…+5d</span></td></tr>
+        <tr><td>Merchant</td><td style="text-align:right">20</td><td style="text-align:right" class="b">25</td></tr>
+        <tr class="alt"><td>Country / city</td><td style="text-align:right">—</td><td style="text-align:right" class="b">10</td></tr>
+        <tr><td>Card last 4</td><td style="text-align:right">10</td><td style="text-align:right">10</td></tr>
+        <tr class="alt"><td>Time</td><td style="text-align:right">5</td><td style="text-align:right">5</td></tr>
+      </table>
+      <p class="tiny muted" style="margin-top:4px">Amount loses weight because it is now an estimate; merchant name gains it, because a Lisbon restaurant descriptor on the HDFC alert is highly distinctive. Auto-match threshold is raised to <span class="b">80</span> for foreign receipts.</p>
+      <div class="card warn small" style="margin-top:3mm"><span class="b">Settlement lag is real.</span> Foreign charges post 1–3 business days after the swipe, and a Saturday dinner in Prague can post the following Tuesday. Hence the asymmetric −1…+5 day window rather than ±7.</div>
+    </div>
+  </div>
+
+  <h4>Everything else that differs outside India</h4>
+  <div class="grid g4" style="margin-bottom:4mm">
+    <div class="card small"><span class="b">Decimal formats</span><br><span class="mono tiny">1.234,56</span> (DE/IT/ES/PT/NL) vs <span class="mono tiny">1,234.56</span> (UK/IE) vs <span class="mono tiny">1 234,56</span> (FR/CZ). Single biggest silent-error source. Explicit prompt rule + a deterministic reparse keyed to the detected country.</div>
+    <div class="card small"><span class="b">Date order</span><br>DD/MM across the EU, MM/DD if a US vendor sneaks in. Unambiguous when day &gt; 12; otherwise resolved by country, and flagged for confirmation when it still can't be.</div>
+    <div class="card small"><span class="b">Tax identity</span><br><span class="mono">gstin</span> generalises to <span class="mono">tax_id</span> + <span class="mono">tax_id_type</span> (GSTIN · EU_VAT · UK_VAT · other), with per-country VAT-number format validation.</div>
+    <div class="card small"><span class="b">Tax labels &amp; languages</span><br>IVA · TVA · MwSt · BTW · MOMS · DPH · VAT. Receipts in PT/ES/FR/DE/IT/NL/CS. <span class="mono">merchant_raw</span> is kept verbatim; <span class="mono">merchant</span> is the normalised English form.</div>
+  </div>
+
+  <div class="grid g3">
+    <div class="card good"><h4>DCC — the easy case</h4><p class="small" style="margin:0">If the terminal offered "pay in INR?" and you accepted, the slip prints <span class="b">both</span> currencies. The model is told to capture the second amount as <span class="mono">dcc_amount_inr</span> — and then an <span class="b">exact</span> match is available again, no FX modelling needed. (It also means you paid a worse rate; the bot quietly notes it.)</p></div>
+    <div class="card"><h4>Markup &amp; GST fee rows</h4><p class="small" style="margin:0">HDFC often posts the markup fee and its GST as <span class="b">separate</span> line items. These are auto-classified as <span class="mono">fee</span>, linked to the parent charge, and shown indented under it in the bundle — so accounts sees ₹4,751 + ₹166 markup + ₹30 GST as one story, not three orphan rows.</p></div>
+    <div class="card warn"><h4>Reclaimable EU VAT</h4><p class="small" style="margin:0">A Europe trip at 19–23% VAT on ~20 bills is real money. Once <span class="mono">tax_breakdown</span> is extracted, the bundle can carry a <span class="b">reclaimable VAT summary</span> by country — the input your finance team needs for a 13th-Directive refund claim. Nearly free to generate; potentially the highest-value page in the document.</p></div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>08</span></div>
+</div>
+<!-- ============ 07 MATCHER ============ -->
+<div class="page">
+  <div class="ph"><span class="n">09 · Core</span><span class="t">The matching engine</span></div>
+  <h2>Binding a receipt to the right charge</h2>
+  <p class="lead" style="margin-bottom:5mm">This is the part that makes or breaks the product. A wrong auto-match is worse than no match, so the engine is <span class="b">deliberately conservative</span>: it only decides alone when the evidence is overwhelming, and it always leaves an undo.</p>
+
+  <div class="grid g23" style="margin-bottom:5mm">
+    <div>
+      <h4>Candidate window</h4>
+      <p class="small">Pull transactions for this <span class="mono">user_id</span> where <span class="mono">is_refund = false</span>, date within <span class="b">±7 days</span> of the receipt date, and amount within <span class="b">±5%</span> or ±₹20 of the receipt total. Typically 0–4 rows.</p>
+      <h4 style="margin-top:5mm">Weighted score (max 100)</h4>
+      <table class="small">
+        <thead><tr><th>Signal</th><th style="text-align:right">Pts</th><th>Rule</th></tr></thead>
+        <tr><td class="b">Amount</td><td style="text-align:right" class="b">40</td><td>exact 40 · ±0.5% 32 · ±2% or ±₹5 22 · else 0</td></tr>
+        <tr class="alt"><td class="b">Date</td><td style="text-align:right" class="b">25</td><td>same day 25 · ±1d 19 · ±2–3d 11 · ±4–7d 4</td></tr>
+        <tr><td class="b">Merchant</td><td style="text-align:right" class="b">20</td><td>normalised token overlap + trigram similarity on <span class="mono">merchant_raw</span> vs the HDFC descriptor</td></tr>
+        <tr class="alt"><td class="b">Card last 4</td><td style="text-align:right" class="b">10</td><td>exact match on the printed tail</td></tr>
+        <tr><td class="b">Time</td><td style="text-align:right" class="b">5</td><td>within 30 min of <span class="mono">txn_time</span></td></tr>
+        <tr class="alt"><td class="b">Penalty</td><td style="text-align:right" class="b">−30</td><td>transaction already has a receipt attached</td></tr>
+      </table>
+      <p class="tiny muted" style="margin-top:4px">Amount is dominant on purpose. In practice the bank alert amount is authoritative and identical to the bill total; date and merchant exist to break ties, not to carry the decision.</p>
+    </div>
+    <div>
+      <h4>Decision tree</h4>
+      <div class="box good" style="border-color:var(--green);background:#ecfdf5"><span class="tag g">AUTO</span><div class="bt" style="margin-top:5px">top ≥ 75 <span class="muted">and</span> (top − second) ≥ 15</div><div class="bd">Link it. Post the result card with an <span class="b">Wrong match</span> undo button. <span class="mono">matched_by='auto'</span>.</div></div>
+      <div class="arrow">▼</div>
+      <div class="box warn" style="border-color:var(--accent);background:#fffbeb"><span class="tag a">ASK</span><div class="bt" style="margin-top:5px">top ≥ 45, or a close runner-up</div><div class="bd">Show the top 3 as inline buttons with their scores plus "None of these". Your tap writes <span class="mono">matched_by='user'</span> — and is logged as training signal.</div></div>
+      <div class="arrow">▼</div>
+      <div class="box" style="border-color:var(--violet);background:#faf5ff"><span class="tag v">DEFER</span><div class="bt" style="margin-top:5px">no candidate ≥ 45</div><div class="bd">Park as <span class="mono">unmatched</span>. Re-run automatically after every Gmail sync for 30 days — this is the common case when you photograph the bill <span class="b">before</span> HDFC sends the alert.</div></div>
+      <div class="arrow">▼</div>
+      <div class="box bad" style="border-color:var(--red);background:#fef2f2"><span class="tag r">DUPLICATE</span><div class="bt" style="margin-top:5px">sha256 already seen</div><div class="bd">Reply with the existing match instead of creating a second row. Zero cost, no vision call.</div></div>
+    </div>
+  </div>
+
+  <div class="rule" style="margin:5mm 0"></div>
+  <h4>The four hard cases, and how each is handled</h4>
+  <div class="grid g2">
+    <table class="small">
+      <tr><td class="b" style="width:38mm">Receipt before the alert</td><td>Deferred queue + post-sync rematch hook in <span class="mono">lib/sync.js</span>. Solved without you doing anything.</td></tr>
+      <tr class="alt"><td class="b">Tip added after the slip</td><td>Bill ₹2,000, card charged ₹2,200. Amount band ±5% covers most tips; beyond that the bot asks and remembers the merchant as a "tip-prone" one.</td></tr>
+    </table>
+    <table class="small">
+      <tr><td class="b" style="width:38mm">One bill, split charges</td><td>Two cards / part-cash. Bot offers <span class="pill">Link to multiple</span> — <span class="mono">receipt_transactions</span> is a join table, not a foreign key, precisely for this.</td></tr>
+      <tr class="alt"><td class="b">Two identical amounts, same day</td><td>Never auto-matched (gap rule blocks it). You pick from buttons; the merchant name on the slip usually makes it obvious.</td></tr>
+    </table>
+  </div>
+  <div class="card fill small" style="margin-top:4mm"><span class="b">Every decision is auditable.</span> <span class="mono">receipts.match_score</span>, <span class="mono">matched_by</span> (auto|user|admin|rematch) and an <span class="mono">app_logs</span> entry are written for every link and every undo. If accounts ever queries a bundle, you can show exactly why receipt R-014 sits against charge #2841.</div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>09</span></div>
+</div>
+
+<!-- ============ TRIPS / BACKFILL ============ -->
+<div class="page">
+  <div class="ph"><span class="n">10 · Backfill</span><span class="t">Trips and the shoebox of old bills</span></div>
+  <h2>The 20 European bills already sitting on your desk</h2>
+  <p class="lead" style="margin-bottom:5mm">Steady-state capture is one photo at a time. A past trip is the opposite problem: a stack of bills, all at once, against transactions that landed in the database weeks ago. Feeding those through the chat flow one by one would take an hour and defeat the point.</p>
+
+  <div class="grid g23" style="margin-bottom:5mm">
+    <div>
+      <h4>Bulk import path</h4>
+      <div class="step"><div class="num">1</div><div class="small"><span class="b">Declare the trip.</span> <span class="mono">/trip Europe · 8–19 Jun 2026</span> in chat, or create it in the dashboard. Sets the date window and marks the receipts as travel.</div></div>
+      <div class="step"><div class="num">2</div><div class="small"><span class="b">Dump everything.</span> Telegram media groups take 10 images per send; the dashboard takes an unlimited multi-file drop. Both land in the same queue.</div></div>
+      <div class="step"><div class="num">3</div><div class="small"><span class="b">Batch extraction.</span> None of this is latency-sensitive, so it goes through the <span class="b">Batch API at 50% off</span> — 20 receipts for about <span class="b">$0.04</span> — instead of 20 live calls.</div></div>
+      <div class="step"><div class="num">4</div><div class="small"><span class="b">Match against the trip window</span>, with the foreign-currency scoring from page 08 and the trip's own transactions as the candidate pool. Far fewer false candidates than a blind ±7-day search.</div></div>
+      <div class="step"><div class="num">5</div><div class="small"><span class="b">One review screen, not 20 chats.</span> A single table: proposed pairing, score, confidence, and every ambiguous one flagged. Confirm the lot in one pass, fix the two that are wrong.</div></div>
+      <div class="card fill small" style="margin-top:3mm"><span class="b">Why a review screen and not chat here.</span> Chat is right when the decision is one tap in the moment. Twenty simultaneous decisions want a table you can scan — this is precisely where the dashboard earns its place alongside the bot.</div>
+    </div>
+    <div>
+      <h4>What a trip adds to the submission</h4>
+      <div class="card" style="padding:0; overflow:hidden; margin-bottom:3mm">
+        <div style="background:var(--teal); color:#fff; padding:5px 8px; font-size:7.5pt; font-weight:700;">BUNDLE · TRIP SECTION</div>
+        <div style="padding:8px; font-size:7.4pt; line-height:1.6">
+          <span class="b">EUROPE · 8–19 JUN 2026</span><br><span class="muted tiny">Portugal · Spain · France · Czechia</span>
+          <div class="rule" style="margin:4px 0"></div>
+          <table class="tiny" style="margin:0">
+            <tr><td>Portugal · 6 receipts</td><td style="text-align:right" class="b">€412.80</td><td style="text-align:right" class="b">₹40,4xx</td></tr>
+            <tr class="alt"><td>Spain · 5 receipts</td><td style="text-align:right" class="b">€388.10</td><td style="text-align:right" class="b">₹38,0xx</td></tr>
+            <tr><td>France · 6 receipts</td><td style="text-align:right" class="b">€511.25</td><td style="text-align:right" class="b">₹50,1xx</td></tr>
+            <tr class="alt"><td>Czechia · 3 receipts</td><td style="text-align:right" class="b">CZK 6,240</td><td style="text-align:right" class="b">₹24,5xx</td></tr>
+            <tr><td class="b">Forex markup + GST</td><td></td><td style="text-align:right" class="b">₹6,1xx</td></tr>
+          </table>
+          <div class="rule" style="margin:4px 0"></div>
+          <span class="b">Reclaimable VAT ≈ €212</span> <span class="muted tiny">across 4 jurisdictions</span>
+        </div>
+      </div>
+      <p class="small" style="margin:0">Each receipt page in the bundle is stamped with both figures — <span class="mono">€48.50 · ₹4,751 @ 97.96 incl. markup</span> — so an accountant can tie the euro bill to the rupee charge without doing the arithmetic themselves. That single line is what stops the "which receipt is this?" reply email.</p>
+      <div class="card warn small" style="margin-top:3mm"><span class="b">Retro-matching caveat, stated plainly.</span> For a trip already in the past, some bills will have no findable counterpart — a cash payment, a charge on a different card, a bill the restaurant printed twice. Expect ~80–90% to bind cleanly and to declare the rest by hand. That is still twenty minutes instead of an afternoon.</div>
+    </div>
+  </div>
+
+  <h4>Trip detection, so you don't have to remember</h4>
+  <div class="grid g3">
+    <div class="card small"><span class="b">Auto-proposed.</span> Three or more foreign-currency charges inside a 14-day window → the bot offers "Looks like a trip, 8–19 Jun, 4 countries. Name it?" You accept or ignore.</div>
+    <div class="card small"><span class="b">Reminded on return.</span> Trip closes → one nudge listing every foreign charge still bare, with country flags, sent while the stack of paper is still in your bag rather than three weeks later.</div>
+    <div class="card small"><span class="b">Submitted separately if you want.</span> A trip can be bundled on its own for a travel-expense claim, independent of the monthly card cycle — same machinery, different date filter.</div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>10</span></div>
+</div>
+
+<!-- ============ CYCLE ============ -->
+<div class="page">
+  <div class="ph"><span class="n">11 · Timing</span><span class="t">Statement cycle, verification window, submission</span></div>
+  <h2>Built around the 18th, not the 1st</h2>
+  <p class="lead" style="margin-bottom:4mm">The card statement lands on the <span class="b">18th</span>. That is the anchor for everything: the cycle closes, the statement is reconciled against what the app collected, discrepancies get five days to resolve, and the verified bundle goes to accounts on the <span class="b">23rd–24th</span>.</p>
+
+<svg viewBox="0 0 740 224" width="100%" style="height:58mm; margin-bottom:4mm">
+  <style>.t1{font:600 10px -apple-system,sans-serif;fill:#0f172a}.t2{font:8.5px -apple-system,sans-serif;fill:#64748b}
+  .t3{font:700 8px -apple-system,sans-serif;fill:#fff;letter-spacing:.6px}</style>
+  <rect x="20" y="66" width="330" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text class="t1" x="34" y="86">Cycle N · 18 Jul → 17 Aug · OPEN</text>
+  <rect x="356" y="66" width="150" height="30" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text class="t1" x="366" y="86">Verify · 18–22 Aug</text>
+  <rect x="512" y="66" width="208" height="30" rx="4" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text class="t1" x="524" y="86">Cycle N+1 · opens 18 Aug</text>
+
+  <rect x="20" y="24" width="286" height="18" rx="9" fill="#059669"/><text class="t3" x="34" y="37">DAILY NUDGE · charges without receipts</text>
+  <rect x="312" y="24" width="38" height="18" rx="9" fill="#dc2626"/><text class="t3" x="320" y="37">T-3</text>
+  <rect x="356" y="24" width="150" height="18" rx="9" fill="#7c3aed"/><text class="t3" x="366" y="37">STATEMENT RECONCILIATION</text>
+  <rect x="512" y="24" width="86" height="18" rx="9" fill="#1e3a8a"/><text class="t3" x="522" y="37">SEND · 23rd</text>
+
+  <line x1="20" y1="106" x2="20" y2="126" stroke="#94a3b8"/><text class="t2" x="14" y="140">18 Jul · cycle opens</text>
+  <line x1="350" y1="106" x2="350" y2="126" stroke="#94a3b8"/><text class="t2" x="286" y="140">17 Aug · cycle closes</text>
+  <line x1="506" y1="106" x2="506" y2="126" stroke="#94a3b8"/><text class="t2" x="452" y="140">23 Aug · bundle sent</text>
+  <line x1="700" y1="106" x2="700" y2="126" stroke="#94a3b8"/><text class="t2" x="632" y="140">~7 Sep · payment due</text>
+  <line x1="362" y1="106" x2="362" y2="160" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="3 2"/>
+  <text class="t2" x="372" y="166" style="fill:#dc2626;font-weight:700">18 Aug · STATEMENT ARRIVES</text>
+  <text class="t2" x="372" y="178">decrypt · parse · reconcile · flag every gap</text>
+  <text class="t2" x="20" y="200">Five clear days between the statement landing and the submission going out — enough to chase a missing receipt, confirm a refund actually credited,</text>
+  <text class="t2" x="20" y="212">and resolve anything the statement shows that the app never saw. Nothing is emailed to accounts until the statement ties out to zero.</text>
+</svg>
+
+  <div class="grid g23">
+    <div>
+      <h4>Cycle configuration — <span class="mono">card_accounts</span></h4>
+      <table class="dense small">
+        <tr><td class="mono" style="width:36mm">entity_name</td><td>"VIP Industries Limited"</td></tr>
+        <tr class="alt"><td class="mono">label / last4</td><td>"HDFC Corporate" · 4821</td></tr>
+        <tr><td class="mono b">statement_day</td><td class="b">18 — the day the statement is issued</td></tr>
+        <tr class="alt"><td class="mono b">submit_day</td><td class="b">23 — verified bundle goes to accounts</td></tr>
+        <tr><td class="mono">statement_password</td><td>to open HDFC's encrypted PDF (stored encrypted, never logged)</td></tr>
+        <tr class="alt"><td class="mono">accounts_email</td><td>recipient(s) in the accounts department</td></tr>
+        <tr><td class="mono">min_receipt_amount</td><td>below this, receipts are auto-waived (default ₹500)</td></tr>
+      </table>
+      <p class="tiny muted" style="margin-top:4px">Cycles are materialised rows, not computed on the fly — a submitted cycle freezes, so changing <span class="mono">statement_day</span> next year never rewrites what accounts already received.</p>
+    </div>
+    <div>
+      <h4>Nudge ladder</h4>
+      <div class="card small" style="margin-bottom:2mm"><span class="tag g">Daily · 20:00 IST</span> Charges from the last 48h with no receipt above the threshold. Silent if there is nothing to chase.</div>
+      <div class="card small" style="margin-bottom:2mm"><span class="tag r">15th · T-3</span> Full outstanding list, sorted by amount. "3 days to close · coverage 78%."</div>
+      <div class="card small" style="margin-bottom:2mm"><span class="tag v">18th · statement day</span> Reconciliation report posted to chat: what tied out, what didn't, which refunds are still missing.</div>
+      <div class="card small" style="margin-bottom:2mm"><span class="tag a">19th–22nd</span> Daily chase on the <span class="b">remaining</span> gaps only, now measured against the statement rather than against the app's guess.</div>
+      <div class="card small" style="margin:0"><span class="tag b2">23rd</span> Bundle built and posted for approval. Still nothing sends without your tap.</div>
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>11</span></div>
+</div>
+
+<!-- ============ STATEMENT RECONCILIATION ============ -->
+<div class="page">
+  <div class="ph"><span class="n">12 · Verify</span><span class="t">Statement ingestion &amp; three-way reconciliation</span></div>
+  <h2>The statement is the truth — everything else is a claim</h2>
+  <p class="lead" style="margin-bottom:4mm">Until now the app's picture of a month came only from email alerts, which is a <span class="b">lossy</span> source: alerts get missed, sync gaps happen, refunds arrive quietly. The statement is the bank's own authoritative ledger. Reconciling against it turns the submission from "what we think you spent" into something that <span class="b">provably ties out</span>.</p>
+
+  <div class="grid g4" style="margin-bottom:4mm">
+    <div class="box"><span class="tag v">18th · 01</span><div class="bt" style="margin-top:5px">Ingest</div><div class="bd">Gmail sync already matches <span class="mono">hdfcbank</span> senders, including <span class="mono">emailstatements.cards@</span>. The statement PDF is picked up automatically — no forwarding needed.</div></div>
+    <div class="box"><span class="tag v">02</span><div class="bt" style="margin-top:5px">Decrypt</div><div class="bd">HDFC e-statements are password-protected. Opened with the stored password via a WASM qpdf build (works on serverless), then discarded from memory.</div></div>
+    <div class="box"><span class="tag v">03</span><div class="bt" style="margin-top:5px">Parse</div><div class="bd">The decrypted PDF goes to Claude as a document, returning every line: date, description, amount, debit/credit, plus opening and closing balance.</div></div>
+    <div class="box"><span class="tag v">04</span><div class="bt" style="margin-top:5px">Reconcile</div><div class="bd">Statement lines ↔ app transactions ↔ receipts. Every line lands in exactly one bucket below. Nothing is allowed to be unclassified.</div></div>
+  </div>
+
+  <h4>The seven outcomes, and what each triggers</h4>
+  <table class="dense" style="margin-bottom:4mm">
+    <thead><tr><th style="width:38mm">Bucket</th><th style="width:20mm">Expected</th><th>Action</th></tr></thead>
+    <tr><td class="b" style="color:var(--green)">Tied out</td><td>~85%</td><td>Statement line matches a transaction and carries a receipt. Nothing to do.</td></tr>
+    <tr class="alt"><td class="b">On statement, missing from app</td><td>a few</td><td><span class="b">The gap you can't currently see.</span> The alert email never arrived or a sync window was missed. The transaction is <span class="b">created from the statement line</span>, then chased for a receipt. This alone justifies the feature.</td></tr>
+    <tr><td class="b">In app, not on statement</td><td>occasional</td><td>Usually a pre-auth that never settled, or a charge that will land in the next cycle. Rolled forward rather than deleted, with a note.</td></tr>
+    <tr class="alt"><td class="b" style="color:var(--brand)">Refund / credit landed</td><td>varies</td><td>Matched against the original charge and the expected-refund ledger. Marks that refund <span class="b">confirmed received</span>.</td></tr>
+    <tr><td class="b" style="color:var(--red)">Refund expected, not received</td><td class="b">the point</td><td>An Amazon return or a disputed charge where the credit <span class="b">has not appeared</span>. Escalated in chat by name and age — "₹4,199 Croma return, 41 days, still not credited". These are the ones that quietly get lost.</td></tr>
+    <tr class="alt"><td class="b">Chargeback / dispute</td><td>rare</td><td>Tracked as its own state through raised → provisional credit → resolved, so a provisional credit is never mistaken for a settled one.</td></tr>
+    <tr><td class="b">Fees</td><td>every cycle</td><td>Annual fee, forex markup, GST on markup, late fee. Auto-categorised as <span class="mono">fee</span>, linked to the parent foreign charge where applicable, and never chased for a receipt.</td></tr>
+  </table>
+
+  <div class="grid g23">
+    <div class="card good">
+      <h4>The control total — the thing that makes this auditable</h4>
+      <p class="small">opening balance + debits − credits − payments = <span class="b">closing balance</span>. The reconciliation must reproduce the statement's own closing figure <span class="b">exactly</span>. If it doesn't, the difference is shown to the rupee and the cycle is blocked from submission until it's explained.</p>
+      <p class="small" style="margin:0">This is the single strongest claim the bundle can make to accounts: not "here are some receipts", but <span class="b">"this reconciles to the bank's statement, and here is the proof line by line."</span> That is the difference between a submission that gets processed and one that generates a thread of questions.</p>
+    </div>
+    <div>
+      <h4>What chat looks like on the 18th</h4>
+      <div class="chat">
+        <div class="bub in"><span class="b">📄 Statement received · 18 Aug</span><br>
+          47 lines · ₹1,58,204 · closing balance <span class="b">ties out ✅</span>
+          <div class="rule" style="margin:4px 0"></div>
+          ✅ 41 matched &amp; receipted<br>
+          ➕ <span class="b">2 charges the app never saw</span> — added<br>
+          ↩︎ 3 refunds confirmed · ₹6,880<br>
+          ⚠️ <span class="b">1 refund still missing</span> — Croma ₹4,199, 41 days<br>
+          💳 3 fee lines auto-categorised
+          <div class="btnrow"><div class="tgbtn">📎 2 need receipts</div><div class="tgbtn">📨 Chase Croma</div></div></div>
+        <div class="bub in" style="background:#fff7ed">5 days to the 23rd. Coverage <span class="b">91%</span> against the statement.</div>
+      </div>
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>12</span></div>
+</div>
+
+<!-- ============ DELIVERABLE ============ -->
+<div class="page">
+  <div class="ph"><span class="n">13 · Output</span><span class="t">What accounts actually receives on the 23rd</span></div>
+  <h2>A CSV, and every receipt file beside it</h2>
+  <p class="lead" style="margin-bottom:4mm">Accounts don't want a description of your receipts — they need the <span class="b">files</span>, to attach against each payment line in their own system. So the deliverable is machine-readable first: one CSV row per statement line, and one receipt file per row, named so the two <span class="b">pair by filename with no thinking required</span>.</p>
+
+  <div class="grid g23" style="margin-bottom:4mm">
+    <div>
+      <h4>The package</h4>
+      <div class="card fill mono tiny" style="line-height:1.8; margin-bottom:3mm">
+VIP_CorpCard_4821_2026-08.zip<br>
+├── <span style="color:#059669">reconciliation_2026-08.csv</span> &nbsp;<span style="color:#64748b">← the spine</span><br>
+├── <span style="color:#1e3a8a">summary_2026-08.pdf</span> &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#64748b">← human-readable index</span><br>
+└── receipts/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;├── R-001_2026-07-19_Indigo_12300.pdf<br>
+&nbsp;&nbsp;&nbsp;&nbsp;├── R-002_2026-07-21_Taj_8940.jpg<br>
+&nbsp;&nbsp;&nbsp;&nbsp;├── R-006_2026-08-12_IndianOil_3400.jpg<br>
+&nbsp;&nbsp;&nbsp;&nbsp;├── R-014_2026-08-03_Lisboa-Rest_4751.jpg<br>
+&nbsp;&nbsp;&nbsp;&nbsp;└── … 38 files
+      </div>
+      <div class="card good small"><span class="b">The filename is the join key.</span> The <span class="mono">receipt_file</span> column in the CSV contains that exact string. Accounts sorts the CSV, opens the folder, and every row has its file — no cross-referencing a PDF, no asking you which receipt is which. <span class="b">Originals are sent verbatim</span>: a vendor's e-invoice PDF stays a PDF, a photo stays the full-resolution photo.</div>
+    </div>
+    <div>
+      <h4>CSV columns</h4>
+      <table class="dense tiny">
+        <tr><td class="mono b" style="width:32mm">stmt_line</td><td>Position on the bank statement — the audit anchor</td></tr>
+        <tr class="alt"><td class="mono b">txn_date · post_date</td><td>Purchase date and the date the bank posted it</td></tr>
+        <tr><td class="mono b">merchant · descriptor</td><td>Cleaned name, plus the raw HDFC descriptor verbatim</td></tr>
+        <tr class="alt"><td class="mono b">amount_inr</td><td class="b">The amount charged — authoritative, from the statement</td></tr>
+        <tr><td class="mono b">currency · amount_orig · fx_rate</td><td>Populated for foreign charges; blank for domestic</td></tr>
+        <tr class="alt"><td class="mono b">type</td><td><span class="mono">purchase</span> · <span class="mono">refund</span> · <span class="mono">fee</span> · <span class="mono">payment</span></td></tr>
+        <tr><td class="mono b">category</td><td>Existing category taxonomy</td></tr>
+        <tr class="alt"><td class="mono b" style="color:var(--green)">receipt_file</td><td class="b">Exact filename in <span class="mono">receipts/</span>, or blank</td></tr>
+        <tr><td class="mono b">receipt_status</td><td><span class="mono">attached</span> · <span class="mono">declared</span> · <span class="mono">waived</span> · <span class="mono">missing</span></td></tr>
+        <tr class="alt"><td class="mono b">declared_reason</td><td>Stated reason where no invoice exists</td></tr>
+        <tr><td class="mono b">tax_id · tax_amount</td><td>GSTIN or EU VAT number, and recoverable tax</td></tr>
+        <tr class="alt"><td class="mono b">invoice_no · trip</td><td>Vendor invoice number; trip name for travel spend</td></tr>
+      </table>
+      <p class="tiny muted" style="margin-top:4px">UTF-8 with BOM so Excel opens Devanagari and accented European merchant names correctly on the first try — a small detail that otherwise generates an email.</p>
+    </div>
+  </div>
+
+  <h4>Why the PDF still ships alongside</h4>
+  <div class="grid g3">
+    <div class="card small"><span class="b">The CSV is for their system.</span> Import, sort, filter, attach. It is the working artifact and the reason the whole package exists.</div>
+    <div class="card small"><span class="b">The PDF is for a human.</span> Cover totals, the statement tie-out, the exception list with your declarations, and every receipt reproduced inline — for whoever reviews or files the claim without opening a spreadsheet.</div>
+    <div class="card warn small"><span class="b">Size discipline.</span> Photos are capped at ~1 MB each (originals stay untouched in storage); vendor PDFs pass through as-is. If the ZIP still exceeds the ~40 MB mail limit it is split into part 1 / part 2, and a 30-day signed link to the full archive is always in the body.</div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>13</span></div>
+</div>
+
+<!-- ============ DELIVERY ============ -->
+<div class="page">
+  <div class="ph"><span class="n">14 · Delivery</span><span class="t">Approval gate, email, dashboard</span></div>
+  <h2>Nothing leaves the building without your tap</h2>
+
+  <div class="grid g23" style="margin-bottom:4mm">
+    <div>
+      <h4>The 23rd, step by step</h4>
+      <div class="grid g2" style="gap:3mm">
+        <div class="box"><span class="tag">1</span><div class="bt" style="margin-top:4px">Gate</div><div class="bd">Build is <span class="b">blocked</span> unless the statement tie-out is zero. An unexplained difference stops the cycle rather than shipping a wrong number.</div></div>
+        <div class="box"><span class="tag">2</span><div class="bt" style="margin-top:4px">Build</div><div class="bd">CSV + summary PDF + <span class="mono">receipts/</span> zipped; <span class="mono">submissions</span> row written as <span class="mono">draft</span>.</div></div>
+        <div class="box"><span class="tag">3</span><div class="bt" style="margin-top:4px">Preview</div><div class="bd">Bot sends the ZIP <span class="b">to you</span> with headline numbers and the exception list.</div></div>
+        <div class="box"><span class="tag">4</span><div class="bt" style="margin-top:4px">Send</div><div class="bd">Resend → accounts, CC you. <span class="mono">resend_id</span> stored; bounces and delivery events logged.</div></div>
+      </div>
+      <div class="chat" style="margin-top:3mm">
+        <div class="bub in"><span class="b">📦 Ready · Cycle 18 Jul – 17 Aug</span><br>
+          47 lines · ₹1,58,204 · <span class="b">statement ties out ✅</span><br>
+          38 receipts attached · <span class="b">93%</span> · 3 declared<br>
+          <span class="mono tiny">VIP_CorpCard_4821_2026-08.zip · 22 MB</span>
+          <div class="btnrow"><div class="tgbtn" style="background:#d9fdd3">✅ Approve &amp; send</div><div class="tgbtn">✏️ Fix first</div><div class="tgbtn">👥 Recipients</div></div></div>
+        <div class="bub in" style="background:#fff7ed"><span class="b">Sent 23 Aug</span> → accounts@vipindustries.com, cc you. Logged as submission #14.</div>
+      </div>
+    </div>
+    <div>
+      <h4>Email to accounts</h4>
+      <div class="card" style="padding:0; overflow:hidden">
+        <div style="background:var(--bg); padding:7px 9px; border-bottom:1px solid var(--line); font-size:7.4pt">
+          <span class="muted">To</span> accounts@vipindustries.com &nbsp; <span class="muted">Cc</span> you<br>
+          <span class="muted">Subject</span> <span class="b">Corp Card ••4821 — Aug statement, reconciled (47 lines, ₹1,58,204) + 38 receipts</span></div>
+        <div style="padding:9px; font-size:7.6pt; line-height:1.55">
+          Hi team,<br><br>
+          Attached is the reconciled statement for <span class="b">18 Jul – 17 Aug 2026</span> on the corporate card ending 4821, verified against HDFC's statement dated 18 Aug.<br>
+          <table class="tiny" style="margin:6px 0">
+            <tr><td>Statement total</td><td class="b" style="text-align:right">₹1,58,204.00</td></tr>
+            <tr class="alt"><td>Reconciled to closing balance</td><td class="b" style="text-align:right; color:#059669">✓ ties out</td></tr>
+            <tr><td>Lines · receipts attached</td><td class="b" style="text-align:right">47 · 38 (93%)</td></tr>
+            <tr class="alt"><td>Refunds confirmed received</td><td class="b" style="text-align:right">3 · ₹6,880</td></tr>
+            <tr><td>Declared exceptions</td><td class="b" style="text-align:right">3 · ₹700</td></tr>
+          </table>
+          <span class="b">The CSV's <span class="mono">receipt_file</span> column gives the exact filename in the <span class="mono">receipts/</span> folder</span> — each row's receipt is attached in full, ready to file against the payment line.<br><br>
+          <span class="muted">📎 VIP_CorpCard_4821_2026-08.zip — reconciliation.csv · summary.pdf · receipts/ (38 files)</span>
+        </div>
+      </div>
+      <p class="tiny muted" style="margin-top:4px">Sent via Resend from your existing verified domain. A bounce or delivery failure raises a Telegram alert — a failed send is never silent.</p>
+    </div>
+  </div>
+
+  <h4>Dashboard · Receipts tab</h4>
+  <div class="grid g4" style="margin-bottom:3mm">
+    <div class="kpi"><div class="v" style="color:var(--green)">93%</div><div class="l">Statement coverage</div></div>
+    <div class="kpi"><div class="v" style="color:var(--accent)">3</div><div class="l">Awaiting receipt</div></div>
+    <div class="kpi"><div class="v" style="color:var(--red)">1</div><div class="l">Refund not received</div></div>
+    <div class="kpi"><div class="v" style="color:var(--brand)">14</div><div class="l">Submissions sent</div></div>
+  </div>
+  <div class="grid g4">
+    <div class="card small"><span class="b">Reconciliation table.</span> Every statement line with its receipt thumbnail, match score and source.</div>
+    <div class="card small"><span class="b">Unmatched pool.</span> Receipts with no home yet — drag onto a line to bind manually.</div>
+    <div class="card small"><span class="b">Refund ledger.</span> Expected vs received, with age. The screen that recovers real money.</div>
+    <div class="card small"><span class="b">Submission history.</span> Past packages, recipients, and a re-send action.</div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>14</span></div>
+</div>
+
+<!-- ============ 11 DATA MODEL ============ -->
+<div class="page">
+  <div class="ph"><span class="n">15 · Data</span><span class="t">Schema additions</span></div>
+  <h2>Nine new tables, four new columns</h2>
+
+<svg viewBox="0 0 740 250" width="100%" style="height:62mm; margin-bottom:4mm">
+  <style>.tt{font:700 10px -apple-system,sans-serif;fill:#0f172a}.tf{font:8px "SF Mono",monospace;fill:#475569}
+  .rl{stroke:#94a3b8;stroke-width:1.2;fill:none}.rlb{font:7.5px -apple-system,sans-serif;fill:#94a3b8}</style>
+  <rect x="10" y="20" width="150" height="94" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text class="tt" x="20" y="38">transactions</text>
+  <text class="tf" x="20" y="54">id · user_id · merchant</text><text class="tf" x="20" y="68">amount · date · category</text>
+  <text class="tf" x="20" y="82" fill="#b45309">+ receipt_status</text><text class="tf" x="20" y="96" fill="#b45309">+ statement_line_id</text>
+
+  <rect x="220" y="20" width="160" height="124" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="tt" x="230" y="37">receipts</text>
+  <text class="tf" x="230" y="52">id · user_id · source</text><text class="tf" x="230" y="65">storage_path · sha256</text>
+  <text class="tf" x="230" y="78">merchant · amount · date</text><text class="tf" x="230" y="91">gstin · invoice_no</text>
+  <text class="tf" x="230" y="104">extracted jsonb · confidence</text><text class="tf" x="230" y="117">status · match_score</text>
+
+  <rect x="440" y="20" width="150" height="66" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="tt" x="450" y="38">receipt_transactions</text>
+  <text class="tf" x="450" y="54">receipt_id · transaction_id</text><text class="tf" x="450" y="68">matched_by · score</text>
+
+  <rect x="10" y="162" width="150" height="80" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="tt" x="20" y="180">card_accounts</text>
+  <text class="tf" x="20" y="196">entity_name · last4</text><text class="tf" x="20" y="210">statement_day · grace</text>
+  <text class="tf" x="20" y="224">accounts_email</text><text class="tf" x="20" y="238">min_receipt_amount</text>
+
+  <rect x="220" y="162" width="160" height="80" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="tt" x="230" y="180">statement_cycles</text>
+  <text class="tf" x="230" y="196">card_account_id</text><text class="tf" x="230" y="210">cycle_start · cycle_end</text>
+  <text class="tf" x="230" y="224">status open|closing</text><text class="tf" x="230" y="238">|submitted</text>
+
+  <rect x="440" y="162" width="150" height="80" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="tt" x="450" y="180">submissions</text>
+  <text class="tf" x="450" y="196">cycle_id · pdf_path</text><text class="tf" x="450" y="210">coverage_pct · totals</text>
+  <text class="tf" x="450" y="224">status · sent_to[]</text><text class="tf" x="450" y="238">resend_id · sent_at</text>
+
+  <rect x="606" y="20" width="128" height="50" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="tt" x="616" y="36">telegram_links</text>
+  <text class="tf" x="616" y="50">user_id · chat_id</text><text class="tf" x="616" y="63">link_code · linked_at</text>
+  <rect x="606" y="80" width="128" height="50" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="tt" x="616" y="96">trips</text>
+  <text class="tf" x="616" y="110">name · countries[]</text><text class="tf" x="616" y="123">start · end · cycle</text>
+  <rect x="606" y="162" width="128" height="50" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="tt" x="616" y="178">fx_rates</text>
+  <text class="tf" x="616" y="192">date · base · quote</text><text class="tf" x="616" y="205">rate · source</text>
+  <rect x="440" y="82" width="150" height="52" rx="6" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+  <text class="tt" x="450" y="98">statements</text>
+  <text class="tf" x="450" y="112">issued_on · opening</text><text class="tf" x="450" y="125">closing · tie_out_diff</text>
+  <rect x="220" y="82" width="160" height="52" rx="6" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+  <text class="tt" x="230" y="98">statement_lines</text>
+  <text class="tf" x="230" y="112">date · descriptor · amount</text><text class="tf" x="230" y="125">type · transaction_id</text>
+
+  <path class="rl" d="M160,66 L216,66"/><text class="rlb" x="168" y="60">1 ─ n</text>
+  <path class="rl" d="M380,54 L436,54"/><text class="rlb" x="388" y="48">1 ─ n</text>
+  <path class="rl" d="M160,80 L200,80 L200,152 L515,152 L515,86"/><text class="rlb" x="300" y="149">n ─ 1</text>
+  <path class="rl" d="M160,202 L216,202"/><text class="rlb" x="168" y="196">1 ─ n</text>
+  <path class="rl" d="M380,202 L436,202"/><text class="rlb" x="388" y="196">1 ─ n</text>
+</svg>
+
+  <div class="grid g23">
+    <div>
+      <h4>Migration — runs in one SQL block</h4>
+      <pre style="font-size:6.6pt; line-height:1.42"><span class="k">create table</span> receipts (
+  id            <span class="n">uuid</span> primary key default gen_random_uuid(),
+  user_id       <span class="n">text</span> not null,
+  source        <span class="n">text</span> not null default <span class="s">'telegram'</span>,
+  tg_chat_id    <span class="n">bigint</span>, tg_message_id <span class="n">bigint</span>, tg_file_id <span class="n">text</span>,
+  storage_path  <span class="n">text</span> not null,
+  mime          <span class="n">text</span>, bytes <span class="n">int</span>, sha256 <span class="n">text</span> not null,
+  doc_type      <span class="n">text</span>,
+  merchant      <span class="n">text</span>, merchant_raw <span class="n">text</span>,
+  amount        <span class="n">numeric</span>, tax_total <span class="n">numeric</span>,
+  receipt_date  <span class="n">date</span>, receipt_time <span class="n">text</span>,
+  <span class="c">-- international</span>
+  currency      <span class="n">text</span> not null default <span class="s">'INR'</span>,
+  amount_inr    <span class="n">numeric</span>, dcc_amount_inr <span class="n">numeric</span>,
+  fx_rate       <span class="n">numeric</span>, fx_date <span class="n">date</span>,
+  country       <span class="n">text</span>, city <span class="n">text</span>, language <span class="n">text</span>,
+  tax_id        <span class="n">text</span>, tax_id_type <span class="n">text</span>, tax_breakdown <span class="n">jsonb</span>,
+  trip_id       <span class="n">uuid</span> references trips(id),
+  invoice_no    <span class="n">text</span>, card_last4 <span class="n">text</span>,
+  extracted     <span class="n">jsonb</span>, confidence <span class="n">numeric</span>,
+  status        <span class="n">text</span> not null default <span class="s">'pending'</span>
+                <span class="k">check</span> (status in (<span class="s">'pending'</span>,<span class="s">'matched'</span>,
+                <span class="s">'unmatched'</span>,<span class="s">'duplicate'</span>,<span class="s">'rejected'</span>)),
+  user_note     <span class="n">text</span>,
+  created_at    <span class="n">timestamptz</span> default now(),
+  <span class="k">unique</span> (user_id, sha256)
+);
+
+<span class="c">-- the bank's own ledger; the spine of every submission</span>
+<span class="k">create table</span> statement_lines (
+  id             <span class="n">uuid</span> primary key default gen_random_uuid(),
+  statement_id   <span class="n">uuid</span> not null references statements(id),
+  line_no        <span class="n">int</span>, txn_date <span class="n">date</span>, post_date <span class="n">date</span>,
+  descriptor     <span class="n">text</span>, amount <span class="n">numeric</span> not null,
+  type           <span class="n">text</span> <span class="k">check</span> (type in (<span class="s">'purchase'</span>,<span class="s">'refund'</span>,
+                 <span class="s">'fee'</span>,<span class="s">'payment'</span>,<span class="s">'chargeback'</span>)),
+  transaction_id <span class="n">bigint</span> references transactions(id),
+  recon_status   <span class="n">text</span> <span class="c">-- tied|created|orphan|unexplained</span>
+);
+<span class="k">create index</span> on receipts (user_id, status, receipt_date <span class="k">desc</span>);
+
+<span class="k">alter table</span> transactions
+  <span class="k">add column</span> receipt_status <span class="n">text</span> default <span class="s">'missing'</span>,
+  <span class="k">add column</span> declared_reason <span class="n">text</span>;</pre>
+    </div>
+    <div>
+      <h4>Design choices worth defending</h4>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Join table, not a foreign key.</span> <span class="mono">receipt_transactions</span> allows one bill split across two charges and one charge covered by two documents (invoice + payment slip). Both happen.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Raw extraction is kept.</span> <span class="mono">extracted jsonb</span> stores the model's full answer. When you improve the prompt in month three, you can re-derive fields from stored JSON without re-billing vision calls.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">sha256 unique per user.</span> The single cheapest defence against duplicate submissions — and it makes the bot's "you already sent me this" reply instant and free.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Materialised cycles.</span> Submitted cycles freeze. Changing your statement day next year must not silently rewrite what accounts already received.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">The statement outranks the app.</span> <span class="mono">statement_lines</span> is the spine of a submission — <span class="mono">transactions</span> becomes the enrichment layer hanging off it, not the source of truth. A line with no matching transaction creates one; a transaction with no line is rolled forward. <span class="mono">statements.tie_out_diff</span> must read zero before anything can be sent.</div>
+      <div class="card small" style="margin:0"><span class="b">Currency is first-class, not an afterthought.</span> <span class="mono">amount</span> is always in the receipt's own currency; <span class="mono">amount_inr</span> is only an <span class="b">estimate</span> — the authoritative rupee figure always lives on the transaction row. <span class="mono">fx_rates</span> is cached per currency-day so a lookup is never paid for twice.</div>
+      <div class="rule"></div>
+      <p class="tiny muted" style="margin:0">Legacy <span class="mono">has_receipt</span> becomes a read-only view over <span class="mono">receipt_status</span>.</p>
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>15</span></div>
+</div>
+
+<!-- ============ 12 API + TOOLS ============ -->
+<div class="page">
+  <div class="ph"><span class="n">16 · Surface</span><span class="t">Routes, jobs, and the tool stack</span></div>
+  <h2>What gets built, concretely</h2>
+
+  <h4>API routes</h4>
+  <table class="dense" style="margin-bottom:4mm">
+    <thead><tr><th style="width:52mm">Route</th><th style="width:16mm">Method</th><th style="width:22mm">Auth</th><th>Purpose</th></tr></thead>
+    <tr><td class="mono">/api/telegram/webhook</td><td>POST</td><td>secret header</td><td>Single entry point for all Telegram updates: photos, documents, commands, button callbacks. Idempotent on <span class="mono">update_id</span>.</td></tr>
+    <tr class="alt"><td class="mono">/api/receipts</td><td>GET</td><td>session</td><td>Dashboard list with filters (status, cycle, unmatched only) + signed thumbnail URLs.</td></tr>
+    <tr><td class="mono">/api/receipts/[id]/match</td><td>POST</td><td>session</td><td>Manual bind / unbind to a transaction. Used by the dashboard drag-drop and the chat "wrong match" undo.</td></tr>
+    <tr class="alt"><td class="mono">/api/receipts/[id]/file</td><td>GET</td><td>session</td><td>Issues a short-lived signed URL. Bytes are never served from the app itself.</td></tr>
+    <tr><td class="mono">/api/cycles</td><td>GET</td><td>session</td><td>Current + historical cycles with coverage stats.</td></tr>
+    <tr class="alt"><td class="mono">/api/submissions</td><td>POST</td><td>session</td><td>Build a bundle for a cycle → returns draft submission + preview URL.</td></tr>
+    <tr><td class="mono">/api/submissions/[id]/send</td><td>POST</td><td>session</td><td>The only route that emails accounts. Requires an explicit approval token from the chat button or the dashboard.</td></tr>
+    <tr class="alt"><td class="mono">/api/cron/tick</td><td>GET</td><td>CRON_SECRET</td><td>Daily dispatcher: <span class="mono">sync</span> → <span class="mono">rematch</span> → <span class="mono">nudge</span> → <span class="mono">cycle-close</span> → <span class="mono">monthly-report</span>, each guarded by its own date condition. Supports <span class="mono">?job=</span> for manual runs.</td></tr>
+  </table>
+
+  <h4>Tool &amp; service inventory</h4>
+  <table class="dense" style="margin-bottom:4mm">
+    <thead><tr><th style="width:40mm">Tool</th><th style="width:20mm">Status</th><th style="width:28mm">Role</th><th>Notes / setup</th></tr></thead>
+    <tr><td class="b">Telegram Bot API</td><td><span class="pill" style="background:#fffbeb;border-color:#fde68a">new</span></td><td>Capture + nudge channel</td><td>Create via @BotFather, webhook with <span class="mono">secret_token</span>. Free. 20 MB file cap.</td></tr>
+    <tr class="alt"><td class="b">Sonnet 5 + GPT-5.6 Terra<br><span class="muted tiny">Opus 5 tiebreak</span></td><td><span class="pill" style="background:#ecfdf5;border-color:#a7f3d0">both keys held</span></td><td>Dual-read extraction</td><td>Consensus routing for accuracy (p.07). <span class="mono">lib/sync.js</span> stays on Claude, untouched.</td></tr>
+    <tr><td class="b">Supabase Storage</td><td><span class="pill" style="background:#fffbeb;border-color:#fde68a">new bucket</span></td><td>Receipt object store</td><td>Private bucket <span class="mono">receipts</span>. Needs <span class="mono">SUPABASE_SERVICE_ROLE_KEY</span> for server-side writes.</td></tr>
+    <tr class="alt"><td class="b">Supabase Postgres</td><td><span class="pill" style="background:#ecfdf5;border-color:#a7f3d0">have</span></td><td>All new tables</td><td>One migration, no changes to existing rows beyond added columns.</td></tr>
+    <tr><td class="b">pdfkit + pdf-lib</td><td><span class="pill" style="background:#fffbeb;border-color:#fde68a">1 new dep</span></td><td>Bundle assembly</td><td><span class="mono">pdfkit</span> already installed; <span class="mono">pdf-lib</span> added to merge vendor e-invoice PDFs.</td></tr>
+    <tr class="alt"><td class="b">sharp</td><td><span class="pill" style="background:#fffbeb;border-color:#fde68a">1 new dep</span></td><td>Image prep</td><td>EXIF auto-rotate, HEIC→JPEG, downscale before vision and before bundling. Big win on both cost and file size.</td></tr>
+    <tr><td class="b">Frankfurter (ECB)</td><td><span class="pill" style="background:#fffbeb;border-color:#fde68a">new</span></td><td>Historical FX rates</td><td>Free, no API key, ECB daily reference rates. Cached in <span class="mono">fx_rates</span> — a few dozen calls a year.</td></tr>
+    <tr class="alt"><td class="b">Resend</td><td><span class="pill" style="background:#ecfdf5;border-color:#a7f3d0">have</span></td><td>Delivery to accounts</td><td>Already wired in <span class="mono">lib/monthly-report.js</span>. Free tier covers this comfortably.</td></tr>
+    <tr><td class="b">Vercel Cron + Functions</td><td><span class="pill" style="background:#ecfdf5;border-color:#a7f3d0">have</span></td><td>Scheduling + compute</td><td>Consolidate to one dispatcher cron (p.03; alternatives on p.16). <span class="mono">maxDuration = 300</span> already proven on the sync route.</td></tr>
+  </table>
+
+  <div class="grid g2" style="margin-top:1mm">
+    <div class="card brand">
+      <h4>Monthly running cost (~120 receipts, 1 cycle)</h4>
+      <table class="dense">
+        <tr><td>Extraction · dual read + 15% tiebreak</td><td class="b" style="text-align:right">≈ $2.30</td></tr>
+        <tr class="alt"><td>FX rates · Frankfurter</td><td class="b" style="text-align:right">$0.00</td></tr>
+        <tr><td>Object storage (≈40 MB/mo)</td><td class="b" style="text-align:right">$0.00 <span class="muted tiny">(free tier)</span></td></tr>
+        <tr class="alt"><td>Telegram Bot API</td><td class="b" style="text-align:right">$0.00</td></tr>
+        <tr><td>Resend (≈ 5 emails/mo)</td><td class="b" style="text-align:right">$0.00 <span class="muted tiny">(free tier)</span></td></tr>
+        <tr class="alt"><td>Compute + scheduling</td><td class="b" style="text-align:right">$0.00 <span class="muted tiny">(existing)</span></td></tr>
+        <tr><td class="b">Total added</td><td class="b" style="text-align:right; color:var(--green)">≈ $2.30 / month</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h4>New environment variables</h4>
+      <pre style="margin:0">TELEGRAM_BOT_TOKEN
+TELEGRAM_WEBHOOK_SECRET
+TELEGRAM_ALLOWED_CHAT_IDS   <span class="c"># comma list</span>
+OPENAI_API_KEY              <span class="c"># second opinion</span>
+SUPABASE_SERVICE_ROLE_KEY   <span class="c"># server only</span>
+ACCOUNTS_EMAIL              <span class="c"># default recipient</span>
+RESEND_FROM                 <span class="c"># verified sender</span></pre>
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>16</span></div>
+</div>
+
+<!-- ============ INFRA ALTERNATIVES ============ -->
+<div class="page">
+  <div class="ph"><span class="n">17 · Infra</span><span class="t">Alternatives to Vercel Cron and the Supabase key model</span></div>
+  <h2>Two constraints, and what to replace them with</h2>
+
+  <h4>A · Scheduling — replacing the 2-slot Vercel Cron limit</h4>
+  <table class="dense" style="margin-bottom:3mm">
+    <thead><tr><th style="width:38mm">Option</th><th style="width:22mm">Cost</th><th style="width:20mm">Granularity</th><th>Trade-off</th></tr></thead>
+    <tr><td class="b">One dispatcher cron <span class="tag o" style="margin-left:3px">SIMPLEST</span></td><td class="b">₹0</td><td>daily</td><td>Stay on Hobby. One <span class="mono">/api/cron/tick</span> branching on the date. Zero new vendors — but one run a day, so every nudge fires at the same fixed hour.</td></tr>
+    <tr class="alt"><td class="b">Supabase <span class="mono">pg_cron</span> + <span class="mono">pg_net</span> <span class="tag g" style="margin-left:3px">RECOMMENDED</span></td><td class="b">₹0</td><td class="b">per minute</td><td>Schedules live in the database you already run, calling your routes over HTTP. Unlimited jobs, minute granularity, unaffected by any Vercel plan change — and the schedule is SQL, so it lives in the migration.</td></tr>
+    <tr><td class="b">Upstash QStash <span class="tag b2" style="margin-left:3px">BEST FIT</span></td><td>free ≤500 msg/day</td><td class="b">per minute</td><td>Scheduler <span class="b">and</span> job queue in one. The Telegram webhook enqueues the vision job and returns 200 instantly, with retries, backoff and dedupe you didn't write — removing the "ack fast, work later" hack entirely.</td></tr>
+    <tr class="alt"><td class="b">Cloudflare Workers Cron</td><td class="b">₹0</td><td>per minute</td><td>Free and dependable, but adds a second deployment target to keep in sync.</td></tr>
+    <tr><td class="b">GitHub Actions <span class="mono">schedule</span></td><td class="b">₹0</td><td>~5–15 min drift</td><td>Zero infra, but runs are best-effort and can be delayed or dropped. Fine for a nudge, wrong for a cycle close.</td></tr>
+    <tr class="alt"><td class="b">Inngest / Trigger.dev</td><td>free tier</td><td>per minute</td><td>Durable multi-step workflows with retries and replay — good for ingest → extract → match, but more machinery than day one needs.</td></tr>
+    <tr><td class="b">Vercel Pro</td><td>$20/mo</td><td>per minute</td><td>Removes the limit and changes nothing else. Only worth it if you want Pro anyway.</td></tr>
+  </table>
+  <div class="card fill small" style="margin-bottom:4mm"><span class="b">Recommendation:</span> <span class="b">pg_cron</span> for schedules — no new vendor, minute granularity, versioned in SQL — plus <span class="b">QStash</span> for the async ingest queue if you'd rather not hand-roll retries. Both free at this volume. Keep the dispatcher route either way: a single <span class="mono">/api/cron/tick?job=</span> entry point makes the scheduler swappable in one line and keeps every job manually runnable.</div>
+
+  <h4>B · Supabase — the auth-issuer problem behind the anon key</h4>
+  <div class="grid g3" style="margin-bottom:4mm">
+    <div class="card bad small"><span class="b">Why RLS is effectively off today.</span> The app authenticates with <span class="b">NextAuth + Google</span>, not Supabase Auth. Supabase's <span class="mono">auth.uid()</span> reads a JWT signed by <span class="b">Supabase's own issuer</span> — a NextAuth session carries no such token, so any policy written against it denies everything. The config that worked became "anon key + permissive policies", which is exactly why the daily cron can read every user's rows. Not a bug anyone introduced — the default outcome of mismatched issuers.</div>
+    <div class="card good small"><span class="b">Fix: service-role + app-layer scoping.</span> <span class="tag g">DO THIS</span><br style="margin-bottom:3px">All DB access stays server-side on the service-role key; every query keeps its <span class="mono">.eq('user_id', …)</span> filter exactly as today; RLS is set to <span class="b">deny-all for anon</span> as defence in depth. About an hour of work, zero behaviour change, and the cron's cross-user read becomes explicit and intentional rather than accidental.</div>
+    <div class="card small"><span class="b">If you want real RLS later.</span> Sign a Supabase-compatible JWT in the NextAuth callback carrying <span class="mono">sub = user_id</span>, using the Supabase JWT secret — then <span class="mono">auth.uid()</span> works. ~30 lines, only needed if the browser should query Supabase directly.<div class="rule"></div><span class="b">Leaving Supabase entirely?</span> <span class="b">Neon</span> (Postgres, generous free tier, on the Vercel Marketplace) is the closest swap — but it migrates a working database for no functional gain. Fix the key model instead.</div>
+  </div>
+  <h4 style="margin-bottom:2px">C · Storage — where receipt images actually belong</h4>
+  <table class="dense">
+    <thead><tr><th style="width:34mm">Option</th><th style="width:38mm">Cost</th><th>Notes</th></tr></thead>
+    <tr><td class="b">Supabase Storage</td><td>1 GB free · egress billed</td><td>Simplest — same client, same auth. But 7-year retention at ~36 MB/month crosses the free tier in about <span class="b">2.5 years</span>.</td></tr>
+    <tr class="alt"><td class="b">Cloudflare R2 <span class="tag g" style="margin-left:3px">BEST LONG-TERM</span></td><td>10 GB free · $0.015/GB · <span class="b">zero egress</span></td><td>No egress charge at all, which matters because every bundle build re-reads 40 images. S3-compatible, presigned URLs.</td></tr>
+    <tr><td class="b">Vercel Blob</td><td>private blobs · egress billed</td><td>Nothing new to configure: same platform, same env, signed URLs built in. Cost lands between the other two.</td></tr>
+    <tr class="alt"><td class="b">Verdict</td><td colspan="2">Ship on whichever is fastest, behind <span class="mono">lib/storage.js</span> — moving to R2 later costs one file, not a migration.</td></tr>
+  </table>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>17</span></div>
+</div>
+<!-- ============ 13 SECURITY ============ -->
+<div class="page">
+  <div class="ph"><span class="n">18 · Trust</span><span class="t">Security, privacy, auditability</span></div>
+  <h2>This layer handles company financial records</h2>
+  <p class="lead" style="margin-bottom:5mm">Receipts carry GSTINs, card tails, vendor details and, for travel, personal itineraries. The bar is higher than for the dashboard, because this data leaves the system and lands in an accounts inbox.</p>
+
+  <div class="grid g2" style="margin-bottom:5mm">
+    <div>
+      <h4>Controls</h4>
+      <table class="small">
+        <tr><td class="b" style="width:34mm">Webhook auth</td><td>Telegram <span class="mono">secret_token</span> header compared in constant time; unknown <span class="mono">chat_id</span> silently dropped and logged. No open POST endpoint.</td></tr>
+        <tr class="alt"><td class="b">Account binding</td><td>One-time codes from Settings, single-use, 15-minute expiry, one chat per user. Unlink button revokes instantly.</td></tr>
+        <tr><td class="b">Object storage</td><td>Private bucket. No public URLs anywhere. Access exclusively via signed URLs with a 15-minute TTL, issued only to the owning session.</td></tr>
+        <tr class="alt"><td class="b">Key hygiene</td><td>Service-role key is server-only and never reaches the browser bundle. Bot token never logged, never echoed in errors.</td></tr>
+        <tr><td class="b">RLS</td><td>Row-level security on every new table keyed to <span class="mono">user_id</span>; cron paths use the admin client explicitly and are the only cross-user readers.</td></tr>
+        <tr class="alt"><td class="b">Send gate</td><td>Outbound email requires an explicit approval action tied to a submission id. No code path emails accounts automatically.</td></tr>
+        <tr><td class="b">Audit trail</td><td><span class="mono">app_logs</span> records every extraction, match, unmatch, declaration, bundle build and send — who, when, what score.</td></tr>
+        <tr class="alt"><td class="b">Retention</td><td>Configurable. Default: originals kept 7 years (statutory GST record retention in India is 6 years from filing), extraction JSON kept indefinitely, Telegram file ids purged after binding.</td></tr>
+      </table>
+    </div>
+    <div>
+      <h4>Threats considered</h4>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Someone finds the bot.</span> They can message it, but with no valid link code and an unknown chat id, every update is dropped before any work is done. No storage write, no vision call, no cost.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Webhook replay.</span> <span class="mono">update_id</span> dedupe makes handling idempotent; a replayed photo resolves to the same sha256 and returns the existing match.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Wrong bundle to the wrong recipient.</span> Recipients come from <span class="mono">card_accounts</span>, are shown in the approval card before sending, and changing them is a separate deliberate action.</div>
+      <div class="card small" style="margin-bottom:3mm"><span class="b">Personal receipt sent by mistake.</span> The bot flags any receipt whose extracted <span class="mono">card_last4</span> disagrees with the configured company card and asks before filing it. Mixed personal spend on a company submission is a real audit problem.</div>
+      <div class="card small" style="margin:0"><span class="b">Vision provider exposure.</span> Receipt images are sent to Anthropic for extraction — the same trust boundary your bank alert emails already cross today in <span class="mono">lib/sync.js</span>. Worth stating explicitly to whoever signs off internally.</div>
+      <div class="rule"></div>
+      <div class="card warn small" style="margin:0"><span class="b">Pre-existing issue this surfaces.</span> The current app authenticates Supabase with the anon key and the daily cron reads every user's rows — which only works because RLS isn't enforcing isolation. Phase 0 fixes that properly rather than building more on top of it.</div>
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>18</span></div>
+</div>
+
+<!-- ============ 14 CHANNEL ============ -->
+<div class="page">
+  <div class="ph"><span class="n">19 · Decision</span><span class="t">Telegram vs iMessage vs WhatsApp</span></div>
+  <h2>Which chat channel — and why Telegram wins</h2>
+  <p class="lead" style="margin-bottom:5mm">You asked for "Telegram or iMessage". They are not equivalent engineering problems. Here is the honest comparison.</p>
+
+  <table style="margin-bottom:5mm">
+    <thead><tr><th style="width:30mm">Criterion</th><th style="width:52mm">Telegram <span class="tag g" style="margin-left:4px">RECOMMENDED</span></th><th style="width:52mm">iMessage</th><th>WhatsApp Business Cloud</th></tr></thead>
+    <tr><td class="b">Official bot API</td><td class="b" style="color:var(--green)">Yes — first-class, free, documented</td><td style="color:var(--red)">No. Apple offers no bot/automation API for iMessage.</td><td>Yes, Meta Cloud API</td></tr>
+    <tr class="alt"><td class="b">Infrastructure</td><td>Webhook → existing Vercel function. Nothing else to run.</td><td style="color:var(--red)">Requires an always-on Mac running BlueBubbles/AppleScript with Full Disk Access, exposed to the internet.</td><td>Webhook → Vercel, plus Meta Business verification</td></tr>
+    <tr><td class="b">Bot-initiated messages</td><td class="b" style="color:var(--green)">Unlimited once you've started the chat — nudges just work</td><td>Possible via the bridge, fragile</td><td style="color:var(--red)">Blocked outside a 24h window unless you use paid approved templates</td></tr>
+    <tr class="alt"><td class="b">Buttons / inline UI</td><td class="b" style="color:var(--green)">Inline keyboards, callbacks, editable messages</td><td style="color:var(--red)">Plain text only</td><td>Limited quick-replies</td></tr>
+    <tr><td class="b">File handling</td><td>Photos + documents, 20 MB, direct download URL</td><td>Works, via the bridge's local filesystem</td><td>Media API, 16 MB</td></tr>
+    <tr class="alt"><td class="b">Ongoing cost</td><td class="b" style="color:var(--green)">₹0</td><td>Cost of keeping a Mac powered on 24/7</td><td>Per-conversation charges on business-initiated messages</td></tr>
+    <tr><td class="b">Reliability risk</td><td class="b" style="color:var(--green)">Low</td><td style="color:var(--red)">High — unofficial, breaks on macOS updates, Apple can shut it down</td><td>Medium — Meta policy changes, template approvals</td></tr>
+    <tr class="alt"><td class="b">Build effort</td><td class="b" style="color:var(--green)">~1.5 days for the full channel layer</td><td>~4–5 days plus permanent Mac ops burden</td><td>~3 days plus business verification lead time</td></tr>
+  </table>
+
+  <div class="grid g23">
+    <div class="card good">
+      <h3>Recommendation: build Telegram first</h3>
+      <p class="small">It is the only option where the channel is a solved problem and all the effort goes into the parts that actually create value — extraction, matching, bundling. You install one free app and the entire nudge/button experience on page 04 becomes possible.</p>
+      <p class="small" style="margin:0"><span class="b">The channel is deliberately abstracted.</span> <span class="mono">lib/telegram.js</span> sits behind a thin <span class="mono">ChannelAdapter</span> interface (<span class="mono">receiveUpdate</span>, <span class="mono">sendMessage</span>, <span class="mono">sendDocument</span>, <span class="mono">editMessage</span>). Adding iMessage or WhatsApp later means writing one adapter, not touching the pipeline.</p>
+    </div>
+    <div>
+      <h4>If you truly want iMessage</h4>
+      <p class="small">Two routes exist, both with the same fundamental caveat — they impersonate a logged-in Mac rather than using a supported API:</p>
+      <ul class="small">
+        <li><span class="b">BlueBubbles server</span> on a Mac mini — REST API over the local Messages database, webhook out to your Vercel app.</li>
+        <li><span class="b">chat-adapter-imessage</span> (community adapter for the Chat SDK) — same underlying approach, nicer abstraction.</li>
+      </ul>
+      <p class="small" style="margin:0">Either way you own a machine that must never sleep, must keep Full Disk Access after every macOS update, and can break without notice. Sensible as a <span class="b">Phase 7 convenience</span>, not as the foundation of a compliance workflow.</p>
+    </div>
+  </div>
+  <div class="card fill small" style="margin-top:4mm"><span class="b">Middle path if the Telegram app is a non-starter:</span> keep Telegram as the engine and add an <span class="b">email-in</span> adapter — forward or AirDrop-to-Mail any receipt to a dedicated address, the same pipeline ingests it. You lose buttons and nudges, but capture still works from any device with zero new apps.</div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>19</span></div>
+</div>
+
+<!-- ============ 15 ROADMAP ============ -->
+<div class="page">
+  <div class="ph"><span class="n">20 · Build</span><span class="t">Phased roadmap</span></div>
+  <h2>Seven phases, each independently shippable</h2>
+  <p class="lead" style="margin-bottom:5mm">Ordered so that value lands early: after Phase 2 you can already capture and match receipts, months before the bundle machinery exists.</p>
+
+<svg viewBox="0 0 740 336" width="100%" style="height:80mm; margin-bottom:3mm">
+  <style>.pn{font:700 10px -apple-system,sans-serif;fill:#0f172a}.pd{font:8.5px -apple-system,sans-serif;fill:#475569}
+  .dy{font:700 8px -apple-system,sans-serif;fill:#fff}.ax{font:8px -apple-system,sans-serif;fill:#94a3b8}</style>
+  <line x1="150" y1="18" x2="740" y2="18" stroke="#e2e8f0"/>
+  <text class="ax" x="152" y="12">Day 1</text><text class="ax" x="300" y="12">Day 4</text><text class="ax" x="450" y="12">Day 8</text>
+  <text class="ax" x="590" y="12">Day 12</text><text class="ax" x="690" y="12">Day 16</text>
+
+  <text class="pn" x="0" y="42">P0 · Foundations</text><text class="pd" x="0" y="56">keys, schema, bucket</text>
+  <rect x="150" y="30" width="75" height="26" rx="4" fill="#1e3a8a"/><text class="dy" x="176" y="47">1.5d</text>
+
+  <text class="pn" x="0" y="82">P1 · Channel</text><text class="pd" x="0" y="96">bot, webhook, linking</text>
+  <rect x="225" y="70" width="75" height="26" rx="4" fill="#2563eb"/><text class="dy" x="252" y="87">1.5d</text>
+
+  <text class="pn" x="0" y="122">P2 · Ingest + read</text><text class="pd" x="0" y="136">storage, vision, dedupe</text>
+  <rect x="300" y="110" width="100" height="26" rx="4" fill="#3b82f6"/><text class="dy" x="340" y="127">2d</text>
+
+  <text class="pn" x="0" y="162">P3 · Matching</text><text class="pd" x="0" y="176">scoring, buttons, defer</text>
+  <rect x="400" y="150" width="100" height="26" rx="4" fill="#7c3aed"/><text class="dy" x="440" y="167">2d</text>
+
+  <text class="pn" x="0" y="202">P4 · Cycles + nudges</text><text class="pd" x="0" y="216">windows, coverage, chase</text>
+  <rect x="500" y="190" width="75" height="26" rx="4" fill="#0891b2"/><text class="dy" x="527" y="207">1.5d</text>
+
+  <text class="pn" x="0" y="242">P5 · Statement recon</text><text class="pd" x="0" y="256">parse, reconcile, tie-out</text>
+  <rect x="575" y="230" width="66" height="26" rx="4" fill="#f59e0b"/><text class="dy" x="597" y="247">2d</text>
+
+  <text class="pn" x="0" y="282">P6 · CSV + send</text><text class="pd" x="0" y="296">package, approval, Resend</text>
+  <rect x="640" y="270" width="70" height="26" rx="4" fill="#059669"/><text class="dy" x="662" y="287">2d</text>
+
+  <text class="pn" x="0" y="322">P7 · Console</text><text class="pd" x="0" y="336">dashboard, history, hardening</text>
+  <rect x="710" y="310" width="28" height="26" rx="4" fill="#0f172a"/><text class="dy" x="713" y="327">1.5d</text>
+
+  <line x1="400" y1="24" x2="400" y2="336" stroke="#dc2626" stroke-dasharray="4 3"/>
+  <text style="font:700 8px -apple-system,sans-serif;fill:#dc2626" x="404" y="40">FIRST REAL USE — capture works here</text>
+</svg>
+
+  <table>
+    <thead><tr><th style="width:26mm">Phase</th><th style="width:62mm">Deliverable</th><th>Done when…</th></tr></thead>
+    <tr><td class="b">P0 · Foundations</td><td>Service-role key, RLS policies, migration for all 9 tables, private storage bucket, cron consolidated to <span class="mono">/api/cron/tick</span></td><td>Existing sync + monthly report still run green off the new dispatcher.</td></tr>
+    <tr class="alt"><td class="b">P1 · Channel</td><td>BotFather setup, webhook route, secret verification, <span class="mono">/start</span> linking with codes from Settings, <span class="mono">/help</span>, <span class="mono">/status</span></td><td>You send "hi" from your phone and get your live cycle totals back.</td></tr>
+    <tr><td class="b">P2 · Ingest + read</td><td>File download, sha256 dedupe, sharp normalisation, storage put, Claude vision extraction, receipts row, chat reply card</td><td>A photo of a real bill returns correct merchant/amount/date within 10 seconds.</td></tr>
+    <tr class="alt"><td class="b">P3 · Matching</td><td><span class="mono">lib/matcher.js</span> scoring, auto/ask/defer branches, inline keyboards, undo, post-sync rematch hook</td><td>20 real receipts: ≥80% auto-matched correctly, zero wrong auto-matches.</td></tr>
+    <tr><td class="b">P4 · Cycles + nudges</td><td><span class="mono">card_accounts</span> config UI, cycle materialisation, coverage engine, daily/T-3/close nudges, declarations</td><td>A cycle rolls over automatically and the nudge fires with the right list.</td></tr>
+    <tr class="alt"><td class="b">P5 · Statement recon</td><td>Statement email ingest, qpdf-wasm decrypt, Claude document parse, three-way reconciliation, refund ledger, tie-out gate</td><td>The 18th produces a report whose closing balance matches HDFC exactly.</td></tr>
+    <tr><td class="b">P6 · CSV + send</td><td><span class="mono">lib/bundle-pdf.js</span>, CSV, approval card, <span class="mono">/api/submissions/[id]/send</span>, Resend delivery, submission log</td><td>Accounts receives a bundle they can process without replying with a question.</td></tr>
+    <tr class="alt"><td class="b">P7 · Console</td><td>Receipts tab, unmatched pool, manual bind, submission history, retry/resend, log surfacing</td><td>Everything doable in chat is also doable in the browser.</td></tr>
+  </table>
+  <p class="small muted" style="margin-top:2mm"><span class="b">Total ≈ 15 working days.</span> P0–P3 (≈7 days) deliver capture and matching; P5 makes the output defensible; P6 is the CSV package accounts files.</p>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>20</span></div>
+</div>
+
+<!-- ============ 16 RISKS ============ -->
+<div class="page">
+  <div class="ph"><span class="n">21 · Risk</span><span class="t">What could go wrong, and the mitigation</span></div>
+  <h2>Failure modes, named in advance</h2>
+  <table style="margin-bottom:5mm">
+    <thead><tr><th style="width:44mm">Risk</th><th style="width:18mm">Likelihood</th><th style="width:16mm">Impact</th><th>Mitigation built into the design</th></tr></thead>
+    <tr><td class="b">Wrong auto-match slips into a submission</td><td>Medium</td><td class="b" style="color:var(--red)">High</td><td>Conservative thresholds (score ≥75 <span class="b">and</span> 15-point gap), one-tap undo on every match, score + reason stored, bundle preview shown before sending.</td></tr>
+    <tr class="alt"><td class="b">Vision misreads the total (tip line, rounding)</td><td class="b">High</td><td>Medium</td><td>Prompt insists on amount-charged-to-card; arithmetic cross-check; and the bank amount always wins — the receipt is evidence, the transaction is truth.</td></tr>
+    <tr><td class="b">Receipt photographed before the bank alert arrives</td><td class="b">High</td><td>Low</td><td>Deferred pool + rematch after every sync. Expected common case, handled by design, invisible to you.</td></tr>
+    <tr class="alt"><td class="b">You stop sending photos after week 3</td><td class="b">High</td><td class="b" style="color:var(--red)">High</td><td>The single biggest risk is behavioural, not technical. Daily nudges with a 2-second reply path, and coverage % as a visible score, exist specifically for this.</td></tr>
+    <tr><td class="b">Gmail refresh token expires (already happened once)</td><td>Medium</td><td>Medium</td><td>Existing <span class="mono">auth_failed</span> logging is extended to alert you <span class="b">in Telegram</span> instead of only writing to <span class="mono">app_logs</span>.</td></tr>
+    <tr class="alt"><td class="b">Bundle too large / bounces</td><td>Medium</td><td>Low</td><td>Downscale to &lt;10 MB target, plus a signed link to full-resolution originals in the mail body.</td></tr>
+    <tr><td class="b">Cron slot limit on the current Vercel plan</td><td class="b">Certain</td><td>Low</td><td>Single dispatcher tick with date-branching. Solved in Phase 0.</td></tr>
+    <tr class="alt"><td class="b">Accounts wants a different format</td><td class="b">High</td><td>Low</td><td>Show them a sample bundle in Phase 5 <span class="b">before</span> finalising layout. Cover/index/exception structure is data-driven and cheap to restyle.</td></tr>
+    <tr><td class="b">Telegram webhook downtime</td><td>Low</td><td>Low</td><td>Telegram retries failed deliveries; <span class="mono">update_id</span> dedupe makes retries safe. Nothing is lost, only delayed.</td></tr>
+  </table>
+
+  <div class="grid g2">
+    <div class="card warn">
+      <h4>The one I'd watch hardest</h4>
+      <p class="small" style="margin:0">Adoption, not accuracy. A reconciliation tool with 99% match accuracy and 40% capture rate is worse than one with 90% accuracy and 95% capture. Every design choice above — 2-second send, no app-switching, buttons instead of typing, daily chase, one-tap declarations — is aimed at capture rate. Treat <span class="b">coverage %</span> as the product's north-star metric, not match precision.</p>
+    </div>
+    <div class="card">
+      <h4>Deliberately out of scope for v1</h4>
+      <ul class="small" style="margin:0">
+        <li>Multi-user / whole-team rollout — built user-scoped, but shipped for one cardholder first</li>
+        <li>Approval workflow inside accounts (they keep their own process)</li>
+        <li>ERP/Tally push — the CSV is the integration seam</li>
+        <li>Automatic GST input-credit claiming — the summary page informs, it doesn't file</li>
+        <li>Mileage / per-diem / cash expenses — card charges only</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>21</span></div>
+</div>
+
+<!-- ============ 17 DECISIONS ============ -->
+<div class="page">
+  <div class="ph"><span class="n">22 · Next</span><span class="t">What I need from you</span></div>
+  <h2>Thirteen answers unblock the entire build</h2>
+  <p class="lead" style="margin-bottom:5mm">Everything else in this document is decided. These are the ones only you can answer — most take a few seconds.</p>
+
+  <table class="dense" style="margin-bottom:3mm">
+    <thead><tr><th style="width:8mm">#</th><th style="width:56mm">Question</th><th style="width:38mm">Default if you don't answer</th><th>Blocks</th></tr></thead>
+    <tr><td class="b">1</td><td class="b">Password for the HDFC e-statement PDF (stored encrypted, never logged)</td><td>Statement parsing can't run without it</td><td class="b">P5</td></tr>
+    <tr class="alt"><td class="b">2</td><td class="b">Accounts department email address (and anyone to CC)?</td><td>Placeholder; nothing sends until set</td><td>P5</td></tr>
+    <tr><td class="b">3</td><td class="b">Last 4 digits of the corporate card</td><td>Skip the card-tail signal (−10 pts of match confidence)</td><td>P3</td></tr>
+    <tr class="alt"><td class="b">4</td><td class="b">Below what amount is a receipt not required?</td><td>₹500 auto-waived</td><td>P4</td></tr>
+    <tr><td class="b">5</td><td class="b">Telegram — will you install it? If not, say so now and I build the email-in adapter instead.</td><td>Telegram</td><td>P1</td></tr>
+    <tr class="alt"><td class="b">6</td><td class="b">Auto-send the bundle at cycle close, or always ask you first?</td><td class="b">Always ask</td><td>P5</td></tr>
+    <tr><td class="b">7</td><td class="b">Does accounts want a specific format? Worth one email to them before P5.</td><td>The layout on page 11</td><td>P5</td></tr>
+    <tr class="alt"><td class="b">8</td><td class="b">Any personal spend on this card that must be excluded from submissions?</td><td>Everything is submitted</td><td>P4</td></tr>
+    <tr><td class="b">9</td><td class="b">Should this stay single-user, or will other VIP cardholders use it later?</td><td>Built user-scoped, shipped for you alone</td><td>P0 sizing</td></tr>
+    <tr class="alt"><td class="b">10</td><td class="b">Is the statement emailed to this same Gmail account? If it goes elsewhere, forwarding takes one rule.</td><td>Assumed same inbox</td><td class="b">P5</td></tr>
+    <tr><td class="b">11</td><td class="b">Which countries and rough dates was the Europe trip?</td><td>Auto-detected from the receipts</td><td>P3</td></tr>
+    <tr class="alt"><td class="b">12</td><td class="b">HDFC forex markup on this card — standard 3.5%, or a negotiated corporate rate?</td><td>3.5% + 18% GST on the markup</td><td>P3</td></tr>
+    <tr><td class="b">13</td><td class="b">Does VIP reclaim EU VAT on business travel?</td><td>Summary included, ignored if irrelevant</td><td>P5</td></tr>
+  </table>
+
+  <div class="grid g23" style="margin-bottom:3mm">
+    <div class="card brand">
+      <h4>If you say go, the first commit is Phase 0</h4>
+      <div class="step"><div class="num">1</div><div class="small">Add <span class="mono">SUPABASE_SERVICE_ROLE_KEY</span>, create the private <span class="mono">receipts</span> bucket, enable RLS on new tables.</div></div>
+      <div class="step"><div class="num">2</div><div class="small">Run the single migration — 9 tables, 4 columns on <span class="mono">transactions</span>, indexes.</div></div>
+      <div class="step"><div class="num">3</div><div class="small">Collapse <span class="mono">vercel.json</span> to one <span class="mono">/api/cron/tick</span> dispatcher and verify sync + monthly report still fire.</div></div>
+      <div class="step"><div class="num">4</div><div class="small">Create the bot with @BotFather, register the webhook with a secret token, link your chat.</div></div>
+      <div class="tiny muted" style="margin-top:4px">End of day 3 you can message the bot and get your live cycle status back. Everything after that is incremental.</div>
+    </div>
+    <div>
+      <h4>How you'll know it's working</h4>
+      <table class="dense small">
+        <tr><td class="b" style="width:16mm">Week 1</td><td>Coverage on the open cycle climbs past 50% with no month-end effort.</td></tr>
+        <tr class="alt"><td class="b">Week 4</td><td>First bundle reaches accounts and comes back with <span class="b">zero</span> follow-up questions.</td></tr>
+        <tr><td class="b">Month 3</td><td>You've stopped thinking about receipts — the only reminder is a nudge you clear in ten seconds.</td></tr>
+      </table>
+      <div class="rule" style="margin:5px 0"></div>
+      <p class="small" style="margin:0"><span class="b">The measurable claim:</span> from ~45 minutes of month-end reconstruction per cycle — plus whatever receipts were simply lost — to ~3 minutes of taps spread across the month, with a coverage number you can defend to finance.</p>
+    </div>
+  </div>
+  
+  <div class="pf"><span>Receipt Rail · VIP Industries Limited</span><span>22</span></div>
+</div>
+
+</body></html>

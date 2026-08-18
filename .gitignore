@@ -46,3 +46,7 @@ skills-lock.json
 *.tsbuildinfo
 next-env.d.ts
 test-report.pdf
+
+# local scratch
+.tmp/
+.playwright-mcp/
