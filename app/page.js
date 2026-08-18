@@ -10,6 +10,7 @@ import OverviewTab from "./components/overview/OverviewTab";
 import SubscriptionsTab from "./components/subscriptions/SubscriptionsTab";
 import TransactionsTab from "./components/transactions/TransactionsTab";
 import ReportsTab from "./components/reports/ReportsTab";
+import ReceiptsTab from "./components/receipts/ReceiptsTab";
 import SettingsTab from "./components/settings/SettingsTab";
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, LineController, Filler);
@@ -130,12 +131,26 @@ function ToastContainer({ toasts }) {
   );
 }
 
+// Tabs that answer to the statement cycle rather than the date picker, so they
+// render whether or not the chosen period happens to contain transactions.
+const CYCLE_SCOPED_TABS = new Set(["receipts", "settings"]);
+
+const TAB_TITLES = {
+  overview: "Overview",
+  transactions: "Transactions",
+  subscriptions: "Subscriptions",
+  receipts: "Receipts",
+  reports: "Reports",
+  settings: "Settings",
+};
+
 // ── Sidebar ──
 function Sidebar({ activeTab, onTabChange, gmailStatus, onSync, syncing, session, theme, onToggleTheme }) {
   const tabs = [
     { key: "overview", label: "Overview", icon: "\uD83D\uDCCA" },
     { key: "transactions", label: "Transactions", icon: "\uD83D\uDCB3" },
     { key: "subscriptions", label: "Subscriptions", icon: "\uD83D\uDD04" },
+    { key: "receipts", label: "Receipts", icon: "\uD83E\uDDFE" },
     { key: "reports", label: "Reports", icon: "\uD83D\uDCC8" },
     { key: "settings", label: "Settings", icon: "\u2699\uFE0F" },
   ];
@@ -204,6 +219,7 @@ function MobileTabBar({ activeTab, onTabChange }) {
     { key: "overview", label: "Overview", icon: "\uD83D\uDCCA" },
     { key: "transactions", label: "Txns", icon: "\uD83D\uDCB3" },
     { key: "subscriptions", label: "Subs", icon: "\uD83D\uDD04" },
+    { key: "receipts", label: "Receipts", icon: "\uD83E\uDDFE" },
     { key: "reports", label: "Reports", icon: "\uD83D\uDCC8" },
     { key: "settings", label: "Settings", icon: "\u2699\uFE0F" },
   ];
@@ -599,7 +615,7 @@ export default function Home() {
         {/* Page Header */}
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontFamily: "var(--font-display)", fontSize: isMobile ? 22 : 28, fontWeight: 800, color: "var(--text)", letterSpacing: -0.8 }}>
-            {activeTab === "overview" ? "Overview" : activeTab === "transactions" ? "Transactions" : activeTab === "subscriptions" ? "Subscriptions" : activeTab === "settings" ? "Settings" : "Reports"}
+            {TAB_TITLES[activeTab] || "Reports"}
           </h1>
           {message && (
             <span style={{ fontSize: 11, color: message.includes("fail") ? "var(--danger)" : "var(--success)", fontWeight: 500 }}>
@@ -628,7 +644,12 @@ export default function Home() {
           </div>
         )}
 
-        {allTransactions.length === 0 && !syncing && !message ? (
+        {CYCLE_SCOPED_TABS.has(activeTab) ? (
+          <div key={activeTab} role="tabpanel" style={{ animation: "slideUp 0.2s ease" }}>
+            {activeTab === "receipts" && <ReceiptsTab isMobile={isMobile} />}
+            {activeTab === "settings" && <SettingsTab session={session} isMobile={isMobile} />}
+          </div>
+        ) : allTransactions.length === 0 && !syncing && !message ? (
           <div style={{ textAlign: "center", padding: isMobile ? "60px 16px" : "80px 20px" }}>
             <div style={{ fontSize: 40, marginBottom: 14, opacity: 0.3, animation: "gentleBounce 2.5s ease-in-out infinite" }}>{"\uD83D\uDCCA"}</div>
             <h2 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, marginBottom: 10, color: "var(--text)", letterSpacing: -0.3 }}>No transactions yet</h2>
@@ -664,7 +685,6 @@ export default function Home() {
                 {activeTab === "transactions" && <TransactionsTab transactions={transactions} allTransactions={allTransactions} startDate={startDate} endDate={endDate} onSelect={setSelectedTxn} isMobile={isMobile} />}
                 {activeTab === "subscriptions" && <SubscriptionsTab transactions={transactions} allTransactions={allTransactions} isMobile={isMobile} chartColors={chartColors} />}
                 {activeTab === "reports" && <ReportsTab transactions={transactions} allTransactions={allTransactions} startDate={startDate} endDate={endDate} isMobile={isMobile} />}
-                {activeTab === "settings" && <SettingsTab session={session} isMobile={isMobile} />}
               </div>
             )}
           </>
