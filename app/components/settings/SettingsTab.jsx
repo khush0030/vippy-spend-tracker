@@ -64,6 +64,8 @@ export default function SettingsTab({ session }) {
       <ProfileCard session={session} />
       <PasswordCard />
       <ConnectionCard />
+      <CorporateCardCard />
+      <ReceiptBotCard />
       <ActivityCard />
       <AccountCard />
     </div>
@@ -394,6 +396,327 @@ function ConnectionCard() {
             )}
           </div>
         )}
+      </div>
+    </section>
+  );
+}
+
+// ── Corporate Card ──
+// Nothing in Receipt Rail runs without this row: cycles, nudges, statement
+// ingest and the submission package all read their dates and recipients here.
+function CorporateCardCard() {
+  const [form, setForm] = useState(null);
+  const [state, setState] = useState({ loading: true, saving: false, encryptionReady: true, error: "" });
+  const [hasPassword, setHasPassword] = useState(false);
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState({ text: "", type: "" });
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/card-account");
+      if (!r.ok) throw new Error(`The card endpoint answered ${r.status}`);
+      const data = await r.json();
+      setForm({
+        entity_name: data.card?.entity_name ?? "VIP Industries Limited",
+        label: data.card?.label ?? "HDFC Corporate",
+        last4: data.card?.last4 ?? "",
+        statement_day: data.card?.statement_day ?? 18,
+        submit_day: data.card?.submit_day ?? 23,
+        min_receipt_amount: data.card?.min_receipt_amount ?? 500,
+        accounts_email: (data.card?.accounts_email ?? []).join(", "),
+        cc_email: (data.card?.cc_email ?? []).join(", "),
+        forex_markup_pct: data.card?.forex_markup_pct ?? 3.5,
+        forex_gst_pct: data.card?.forex_gst_pct ?? 18,
+      });
+      setHasPassword(Boolean(data.card?.hasStatementPassword));
+      setState((s) => ({ ...s, loading: false, error: "", encryptionReady: data.encryptionReady !== false }));
+      if (data.card && data.card.hasStatementPassword && data.card.statementPasswordEncrypted === false) {
+        setMsg({ text: "The stored statement password predates encryption. Re-enter it to encrypt it at rest.", type: "error" });
+      }
+    } catch (err) {
+      // Without this the card sat on "Loading…" forever with nothing to act on.
+      setState((s) => ({ ...s, loading: false, error: err.message }));
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setState((s) => ({ ...s, saving: true }));
+    setMsg({ text: "", type: "" });
+    try {
+      // Absent means "leave it alone" — the password is only sent when typed.
+      const body = { ...form };
+      if (password) body.statement_password = password;
+
+      const r = await fetch("/api/card-account", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+
+      if (r.ok) {
+        setMsg({ text: "Saved", type: "success" });
+        setPassword("");
+        setHasPassword(Boolean(data.card?.hasStatementPassword));
+      } else {
+        setMsg({ text: data.error || "Could not save", type: "error" });
+      }
+    } catch (err) {
+      setMsg({ text: err.message, type: "error" });
+    }
+    setState((s) => ({ ...s, saving: false }));
+  };
+
+  return (
+    <section>
+      <h2 style={sectionLabelStyle}>Corporate Card</h2>
+      <div style={cardStyle}>
+        {state.error ? (
+          <div>
+            <div style={{ fontSize: 13, color: "var(--danger)", fontWeight: 600, marginBottom: 6 }}>
+              Could not load the card configuration
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>{state.error}</div>
+            <button
+              onClick={load}
+              style={{
+                padding: "9px 16px",
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "var(--bg-card-2)",
+                color: "var(--text)",
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: "var(--font-display)",
+                cursor: "pointer",
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        ) : state.loading || !form ? (
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading…</div>
+        ) : (
+          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+              The statement arrives on the statement day and the package goes to accounts on the
+              submit day. Everything between the two is the window for chasing missing receipts.
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14 }}>
+              <div>
+                <div style={fieldLabel}>Entity</div>
+                <input value={form.entity_name} onChange={set("entity_name")} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+              </div>
+              <div>
+                <div style={fieldLabel}>Card last 4</div>
+                <input value={form.last4} onChange={set("last4")} placeholder="4417" style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+              <div>
+                <div style={fieldLabel}>Statement day</div>
+                <input type="number" min={1} max={31} value={form.statement_day} onChange={set("statement_day")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
+              </div>
+              <div>
+                <div style={fieldLabel}>Submit day</div>
+                <input type="number" min={1} max={31} value={form.submit_day} onChange={set("submit_day")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
+              </div>
+              <div>
+                <div style={fieldLabel}>Receipt threshold</div>
+                <input type="number" min={0} step="50" value={form.min_receipt_amount} onChange={set("min_receipt_amount")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: -8 }}>
+              Charges under {fmtINR(Number(form.min_receipt_amount) || 0)} are waived automatically and never chased.
+            </div>
+
+            <div>
+              <div style={fieldLabel}>Accounts email</div>
+              <input value={form.accounts_email} onChange={set("accounts_email")} placeholder="accounts@vipindustries.com" style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+            </div>
+            <div>
+              <div style={fieldLabel}>CC</div>
+              <input value={form.cc_email} onChange={set("cc_email")} placeholder="optional, comma separated" style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+            </div>
+
+            <div>
+              <div style={fieldLabel}>Statement PDF password</div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={hasPassword ? "•••••••• saved — type to replace" : "HDFC's e-statement password"}
+                style={inputStyle}
+                autoComplete="off"
+                onFocus={onFocus}
+                onBlur={onBlur}
+              />
+              <div style={{ fontSize: 12, color: state.encryptionReady ? "var(--text-muted)" : "var(--danger)", marginTop: 6, lineHeight: 1.5 }}>
+                {state.encryptionReady
+                  ? "Encrypted at rest and only ever replayed to the PDF reader. Never logged, never returned by the API."
+                  : "STATEMENT_PW_KEY is not set on the server, so the password cannot be stored. Set it and reload."}
+              </div>
+            </div>
+
+            <details>
+              <summary style={{ ...fieldLabel, cursor: "pointer", marginBottom: 0 }}>Foreign charge constants</summary>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
+                <div>
+                  <div style={fieldLabel}>Forex markup %</div>
+                  <input type="number" step="0.1" value={form.forex_markup_pct} onChange={set("forex_markup_pct")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
+                </div>
+                <div>
+                  <div style={fieldLabel}>GST on markup %</div>
+                  <input type="number" step="0.1" value={form.forex_gst_pct} onChange={set("forex_gst_pct")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.5 }}>
+                Used to model what a euro bill should post at in rupees. A foreign receipt can never
+                match on amount equality, so it is matched against this band instead.
+              </div>
+            </details>
+
+            {msg.text && (
+              <div style={{ fontSize: 12, fontWeight: 600, color: msg.type === "error" ? "var(--danger)" : "var(--success)", lineHeight: 1.5 }}>
+                {msg.text}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={state.saving}
+              style={{
+                padding: "12px 22px",
+                borderRadius: 10,
+                border: "none",
+                background: state.saving ? "var(--bg-card-2)" : "var(--brand)",
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 700,
+                alignSelf: "flex-start",
+                fontFamily: "var(--font-display)",
+                letterSpacing: "0.02em",
+                cursor: state.saving ? "default" : "pointer",
+              }}
+            >
+              {state.saving ? "Saving…" : "Save card"}
+            </button>
+          </form>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Receipt Bot ──
+// Binds one Telegram chat to this account. The code is single-use and short
+// lived, so a screenshot of it in a group chat is worth nothing an hour later.
+function ReceiptBotCard() {
+  const [link, setLink] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/telegram/link");
+      setLink(await r.json());
+    } catch {
+      setMsg("Could not read the link state");
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const issue = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await fetch("/api/telegram/link", { method: "POST" });
+      const data = await r.json();
+      if (r.ok) await load();
+      else setMsg(data.error || "Could not issue a code");
+    } catch (e) {
+      setMsg(e.message);
+    }
+    setBusy(false);
+  };
+
+  const unlink = async () => {
+    if (!confirm("Unlink the chat? The bot will stop accepting receipts until you link again.")) return;
+    setBusy(true);
+    setMsg("");
+    try {
+      await fetch("/api/telegram/link", { method: "DELETE" });
+      await load();
+    } catch (e) {
+      setMsg(e.message);
+    }
+    setBusy(false);
+  };
+
+  const buttonStyle = {
+    padding: "10px 18px",
+    borderRadius: 10,
+    border: "1px solid var(--border)",
+    background: "var(--bg-card-2)",
+    color: "var(--text)",
+    fontSize: 12,
+    fontWeight: 700,
+    fontFamily: "var(--font-display)",
+    cursor: busy ? "default" : "pointer",
+  };
+
+  return (
+    <section>
+      <h2 style={sectionLabelStyle}>Receipt Bot</h2>
+      <div style={cardStyle}>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
+          Photograph a bill, send it to the bot, and it files itself against the right charge.
+        </div>
+
+        {link?.linked ? (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ fontSize: 13 }}>
+              <span style={{ color: "var(--success)", fontWeight: 700 }}>Linked</span>
+              {link.username ? <span style={{ color: "var(--text-muted)" }}> · @{link.username}</span> : null}
+            </div>
+            <button onClick={unlink} disabled={busy} style={buttonStyle}>
+              Unlink
+            </button>
+          </div>
+        ) : link?.pendingCode ? (
+          <div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 10 }}>
+              Open the bot in Telegram and send:
+            </div>
+            <div style={{ ...numStyle, fontSize: 22, fontWeight: 800, letterSpacing: "0.06em", marginBottom: 10 }}>
+              /start {link.pendingCode}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Single use. Expires {link.codeExpiresAt ? new Date(link.codeExpiresAt).toLocaleTimeString() : "shortly"}.
+            </div>
+            <button onClick={issue} disabled={busy} style={{ ...buttonStyle, marginTop: 14 }}>
+              {busy ? "Working…" : "New code"}
+            </button>
+          </div>
+        ) : (
+          <button onClick={issue} disabled={busy} style={buttonStyle}>
+            {busy ? "Working…" : "Link a Telegram chat"}
+          </button>
+        )}
+
+        {msg && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 12 }}>{msg}</div>}
       </div>
     </section>
   );
