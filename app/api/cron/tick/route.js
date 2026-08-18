@@ -5,6 +5,8 @@ import { sendMonthlyReportForUser } from "@/lib/monthly-report";
 import { getCardAccount, cycleAwaitingSubmission } from "@/lib/cycles";
 import { buildAndRequestApproval } from "@/lib/submission-approval";
 import { rematchPendingReceipts } from "@/lib/match-service";
+import { retryFailedExtractions } from "@/lib/receipt-pipeline";
+import { alertIfSyncUnhealthy } from "@/lib/sync-alert";
 import { runNudge } from "@/lib/nudge";
 import { runStatementJob } from "@/lib/statement-recon";
 import { logError, logInfo } from "@/lib/logger";
@@ -25,7 +27,7 @@ export const dynamic = "force-dynamic";
  *   sync       every day   Gmail → Claude → transactions
  *   rematch    every day   bind receipts that arrived before their bank alert
  *   nudge      every day   chase charges still lacking a receipt
- *   statement  day 18      ingest + reconcile the card statement
+ *   statement  days 17-19  ingest + reconcile the card statement
  *   submit     day 23      build the verified package for approval
  *   report     day 4       the existing monthly report
  */
@@ -37,7 +39,10 @@ function jobsForToday(day, card) {
   const submitDay = card?.submit_day ?? 23;
 
   const due = ["sync", "rematch", "nudge"];
-  if (day === statementDay) due.push("statement");
+  // The statement is dated on `statement_day` but the email lands a day or two
+  // later, so the ingest is attempted on the following three days. Repeats are
+  // free: a statement already on file is skipped by its Gmail message id.
+  if (day > statementDay && day <= statementDay + 3) due.push("statement");
   if (day === submitDay) due.push("submit");
   if (day === 4) due.push("report");
   return due;
@@ -110,14 +115,22 @@ async function runJob(job, user) {
   switch (job) {
     case "sync": {
       const r = await syncUserTransactions({ userId: user.id });
-      return { inserted: r?.inserted ?? 0 };
+      // A sync that fails quietly is how the ledger went two months stale, so
+      // the health check runs on the way out rather than on its own schedule.
+      const health = await alertIfSyncUnhealthy(user.id, {
+        hadBatchFailure: r?.advanced === false,
+      });
+      return { inserted: r?.inserted ?? 0, alerted: health.alerted };
     }
 
     case "rematch": {
       // Safety net: sync already rematches after an insert, but a receipt whose
       // charge arrived through some other path still gets picked up here.
+      // A read that failed on a provider outage is retried first, so a
+      // recovered receipt can be matched in the same pass.
+      const retried = await retryFailedExtractions(user.id);
       const r = await rematchPendingReceipts(user.id);
-      return { checked: r.checked, matched: r.matched };
+      return { checked: r.checked, matched: r.matched, ...retried };
     }
 
     case "nudge": {
