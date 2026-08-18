@@ -5,6 +5,7 @@ import {
   normalizeStatementLine,
   sumByDirection,
   controlTotal,
+  mergeChunkReads,
 } from "../lib/statement-lines.js";
 
 describe("classifyLine", () => {
@@ -162,5 +163,64 @@ describe("controlTotal", () => {
   test("absorbs float noise but not a real one-rupee gap", () => {
     assert.equal(controlTotal({ opening: 0.1, debits: 0.2, credits: 0, payments: 0, closing: 0.3 }).tiesOut, true);
     assert.equal(controlTotal({ opening: 0, debits: 100, credits: 0, payments: 0, closing: 99 }).tiesOut, false);
+  });
+});
+
+describe("mergeChunkReads", () => {
+  const chunk = (from, to, json) => ({ from, to, json });
+
+  test("keeps every line and renumbers them across the whole statement", () => {
+    const merged = mergeChunkReads([
+      chunk(1, 4, { lines: [{ description: "A" }, { description: "B" }] }),
+      chunk(5, 8, { lines: [{ description: "C" }] }),
+    ]);
+
+    assert.deepEqual(merged.lines.map((l) => l.description), ["A", "B", "C"]);
+  });
+
+  test("chunks are stitched in page order however they finished", () => {
+    const merged = mergeChunkReads([
+      chunk(5, 8, { lines: [{ description: "C" }] }),
+      chunk(1, 4, { lines: [{ description: "A" }] }),
+    ]);
+
+    assert.deepEqual(merged.lines.map((l) => l.description), ["A", "C"]);
+  });
+
+  test("header figures are taken from whichever page printed them", () => {
+    const merged = mergeChunkReads([
+      chunk(1, 4, { lines: [], openingBalance: 100, cardLast4: "7634", closingBalance: null }),
+      chunk(5, 8, { lines: [], closingBalance: 250, minimumDue: 40 }),
+    ]);
+
+    assert.equal(merged.openingBalance, 100);
+    assert.equal(merged.closingBalance, 250);
+    assert.equal(merged.minimumDue, 40);
+    assert.equal(merged.cardLast4, "7634");
+  });
+
+  test("the earliest page wins a header field two pages both claim", () => {
+    const merged = mergeChunkReads([
+      chunk(1, 4, { lines: [], closingBalance: 250 }),
+      chunk(5, 8, { lines: [], closingBalance: 999 }),
+    ]);
+
+    assert.equal(merged.closingBalance, 250);
+  });
+
+  test("a chunk that could not be read is skipped, and named", () => {
+    const merged = mergeChunkReads([
+      chunk(1, 4, { lines: [{ description: "A" }] }),
+      { from: 5, to: 8, json: null },
+    ]);
+
+    assert.deepEqual(merged.lines.map((l) => l.description), ["A"]);
+    assert.deepEqual(merged.unread, ["5-8"]);
+  });
+
+  test("nothing readable at all is empty rather than broken", () => {
+    const merged = mergeChunkReads([{ from: 1, to: 4, json: null }]);
+    assert.deepEqual(merged.lines, []);
+    assert.deepEqual(merged.unread, ["1-4"]);
   });
 });
