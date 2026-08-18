@@ -8,6 +8,7 @@ import {
   receiptFilename,
   packageName,
   extensionFor,
+  planAttachments,
 } from "../lib/submission-naming.js";
 
 describe("escapeCell", () => {
@@ -226,5 +227,62 @@ describe("packageName", () => {
       packageName({ last4: "4821" }, { cycle_end: "2026-08-17" }, "csv"),
       "VIP_CorpCard_4821_2026-08.csv"
     );
+  });
+});
+
+describe("planAttachments", () => {
+  const receipts = {
+    r1: { id: "r1", receipt_date: "2026-08-10", merchant: "Saravanaa Bhavan", amount: 73.82, mime: "image/jpeg" },
+    r2: { id: "r2", receipt_date: "2026-08-10", merchant: "S.B. Rome", amount: 70.3, mime: "image/jpeg" },
+    r3: { id: "r3", receipt_date: "2026-08-11", merchant: "Oakberry", amount: 29, mime: "image/jpeg" },
+  };
+  const txns = [{ id: 307 }, { id: 304 }];
+
+  test("numbers receipts in the order the charges appear", () => {
+    const plan = planAttachments(txns, [
+      { transaction_id: 304, receipt_id: "r3" },
+      { transaction_id: 307, receipt_id: "r1" },
+    ], receipts);
+
+    assert.match(plan.namesByTxn.get(307)[0], /^R-001_2026-08-10_Saravanaa-Bhavan_74\./);
+    assert.match(plan.namesByTxn.get(304)[0], /^R-002_2026-08-11_Oakberry_29\./);
+  });
+
+  test("a charge with two receipts keeps both — neither may be dropped", () => {
+    const plan = planAttachments(txns, [
+      { transaction_id: 307, receipt_id: "r1" },
+      { transaction_id: 307, receipt_id: "r2" },
+    ], receipts);
+
+    assert.equal(plan.namesByTxn.get(307).length, 2);
+    assert.equal(plan.files.length, 2);
+    assert.deepEqual(
+      plan.files.map((f) => f.receiptId).sort(),
+      ["r1", "r2"]
+    );
+  });
+
+  test("one receipt covering two charges is stored once and cited by both", () => {
+    const plan = planAttachments(txns, [
+      { transaction_id: 307, receipt_id: "r1" },
+      { transaction_id: 304, receipt_id: "r1" },
+    ], receipts);
+
+    assert.equal(plan.files.length, 1);
+    assert.equal(plan.namesByTxn.get(307)[0], plan.namesByTxn.get(304)[0]);
+  });
+
+  test("a link whose receipt is missing is reported, not silently dropped", () => {
+    const plan = planAttachments(txns, [{ transaction_id: 307, receipt_id: "gone" }], receipts);
+
+    assert.equal(plan.files.length, 0);
+    assert.deepEqual(plan.missing, ["gone"]);
+    assert.equal(plan.namesByTxn.has(307), false);
+  });
+
+  test("charges without a receipt simply have none", () => {
+    const plan = planAttachments(txns, [], receipts);
+    assert.equal(plan.files.length, 0);
+    assert.equal(plan.namesByTxn.size, 0);
   });
 });
