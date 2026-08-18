@@ -24,7 +24,8 @@
     "react": "19.2.4",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "19.2.4",
-    "resend": "^6.10.0"
+    "resend": "^6.10.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "esbuild-register": "^3.6.0"
