@@ -31,13 +31,13 @@ describe("generateEncryptionKey", () => {
 
 describe("encryptSecret / decryptSecret", () => {
   test("round-trips a password", () => {
-    const out = encryptSecret("VIPI4417");
-    assert.equal(decryptSecret(out), "VIPI4417");
+    const out = encryptSecret("TEST0000");
+    assert.equal(decryptSecret(out), "TEST0000");
   });
 
   test("never stores the password in the open", () => {
-    const out = encryptSecret("VIPI4417");
-    assert.doesNotMatch(out, /VIPI4417/);
+    const out = encryptSecret("TEST0000");
+    assert.doesNotMatch(out, /TEST0000/);
     assert.equal(isCiphertext(out), true);
   });
 
@@ -51,7 +51,7 @@ describe("encryptSecret / decryptSecret", () => {
   });
 
   test("refuses a tampered ciphertext rather than returning garbage", () => {
-    const out = encryptSecret("VIPI4417");
+    const out = encryptSecret("TEST0000");
     const parts = out.split(":");
     // Flip a byte of the ciphertext body.
     const body = Buffer.from(parts[3], "base64");
@@ -62,8 +62,8 @@ describe("encryptSecret / decryptSecret", () => {
 
   test("a row written before encryption existed still reads", () => {
     // Legacy plaintext must keep working — the column predates this module.
-    assert.equal(decryptSecret("VIPI4417"), "VIPI4417");
-    assert.equal(isCiphertext("VIPI4417"), false);
+    assert.equal(decryptSecret("TEST0000"), "TEST0000");
+    assert.equal(isCiphertext("TEST0000"), false);
   });
 
   test("empty and null pass through untouched", () => {
@@ -78,7 +78,7 @@ describe("without a key configured", () => {
     delete process.env.STATEMENT_PW_KEY;
     try {
       assert.equal(hasEncryptionKey(), false);
-      assert.throws(() => encryptSecret("VIPI4417"), /STATEMENT_PW_KEY/);
+      assert.throws(() => encryptSecret("TEST0000"), /STATEMENT_PW_KEY/);
     } finally {
       process.env.STATEMENT_PW_KEY = key;
     }

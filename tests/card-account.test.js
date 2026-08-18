@@ -75,7 +75,7 @@ describe("validateCardConfig", () => {
   });
 
   test("never carries the password into the update payload", () => {
-    const v = ok({ statement_password: "VIPI4417" });
+    const v = ok({ statement_password: "TEST0000" });
     assert.equal("statement_password" in v, false);
   });
 
