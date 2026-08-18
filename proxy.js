@@ -8,6 +8,9 @@ export async function proxy(request) {
   if (
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/cron") ||
+    // Telegram authenticates with its own secret header, checked in the route.
+    // A session cookie is meaningless here — the caller is a bot, not a browser.
+    pathname === "/api/telegram/webhook" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"
