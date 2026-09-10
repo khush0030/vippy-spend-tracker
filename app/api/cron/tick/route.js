@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { syncUserTransactions } from "@/lib/sync";
 import { sendMonthlyReportForUser } from "@/lib/monthly-report";
-import { getCardAccount, cycleAwaitingSubmission } from "@/lib/cycles";
+import { getCardAccount, cycleAwaitingSubmission, currentCycle } from "@/lib/cycles";
 import { buildAndRequestApproval } from "@/lib/submission-approval";
 import { rematchPendingReceipts } from "@/lib/match-service";
 import { retryFailedExtractions } from "@/lib/receipt-pipeline";
 import { alertIfSyncUnhealthy } from "@/lib/sync-alert";
 import { runNudge } from "@/lib/nudge";
 import { runStatementJob } from "@/lib/statement-recon";
+import { harvestCycle } from "@/lib/harvest";
+import { checkMailboxes } from "@/lib/mailbox-health";
 import { logError, logInfo } from "@/lib/logger";
 
 export const maxDuration = 300;
@@ -27,22 +29,28 @@ export const dynamic = "force-dynamic";
  *   sync       every day   Gmail → Claude → transactions
  *   rematch    every day   bind receipts that arrived before their bank alert
  *   nudge      every day   chase charges still lacking a receipt
+ *   mailboxes  every day   credential health check, alert on failure transition
  *   statement  days 17-19  ingest + reconcile the card statement
+ *   harvest    days 17-23  sweep invoices from email and bind them to charges
  *   submit     day 23      build the verified package for approval
  *   report     day 4       the existing monthly report
  */
 
-const JOBS = ["sync", "rematch", "nudge", "statement", "submit", "report"];
+const JOBS = ["sync", "rematch", "nudge", "harvest", "statement", "submit", "report", "mailboxes"];
 
 function jobsForToday(day, card) {
   const statementDay = card?.statement_day ?? 18;
   const submitDay = card?.submit_day ?? 23;
 
-  const due = ["sync", "rematch", "nudge"];
+  const due = ["sync", "rematch", "nudge", "mailboxes"];
   // The statement is dated on `statement_day` but the email lands a day or two
   // later, so the ingest is attempted on the following three days. Repeats are
   // free: a statement already on file is skipped by its Gmail message id.
   if (day > statementDay && day <= statementDay + 3) due.push("statement");
+  // Harvesting runs every day from the statement closing until the package
+  // goes out. It is idempotent, so a daily sweep simply catches the invoices
+  // that arrive late — and most of them do.
+  if (day > statementDay && day <= submitDay) due.push("harvest");
   if (day === submitDay) due.push("submit");
   if (day === 4) due.push("report");
   return due;
@@ -154,6 +162,45 @@ async function runJob(job, user) {
       if (!cycle) return { skipped: "no cycle awaiting submission" };
       return buildAndRequestApproval({ userId: user.id, cycle });
     }
+
+    case "harvest": {
+      const cycle = await currentCycle(user.id);
+      if (!cycle) return { skipped: "no card configured" };
+
+      const { data: statement } = await getSupabaseAdmin()
+        .from("statements")
+        .select("id, cycle_id, issued_on, status")
+        .eq("user_id", user.id)
+        .eq("status", "reconciled")
+        .order("issued_on", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // Nothing to look for until the bank has told us what was charged.
+      if (!statement) return { skipped: "no reconciled statement yet" };
+
+      const { data: cycleRow } = await getSupabaseAdmin()
+        .from("statement_cycles")
+        .select("*, card:card_accounts(*)")
+        .eq("id", statement.cycle_id ?? cycle.id)
+        .maybeSingle();
+
+      const summary = await harvestCycle({
+        userId: user.id,
+        cycle: cycleRow || cycle,
+        statement,
+      });
+
+      return {
+        scanned: summary.scanned ?? 0,
+        matched: summary.matched ?? 0,
+        ambiguous: summary.ambiguous ?? 0,
+        errors: summary.errors ?? 0,
+      };
+    }
+
+    case "mailboxes":
+      return checkMailboxes(user.id);
 
     case "report": {
       const r = await sendMonthlyReportForUser({ userId: user.id });
