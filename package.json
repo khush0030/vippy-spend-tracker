@@ -18,6 +18,8 @@
     "chartjs-chart-treemap": "^3.1.0",
     "dotenv": "^17.4.1",
     "googleapis": "^171.4.0",
+    "imapflow": "^1.7.8",
+    "mailparser": "^3.9.23",
     "next": "16.2.2",
     "next-auth": "^4.24.13",
     "pdfkit": "^0.18.0",
