@@ -36,7 +36,7 @@ IMAP is a long-lived TLS connection on port 993, not HTTP. If Vercel's runtime b
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: a yes/no answer that gates Tasks 4b, 7 and 9. No code survives this task.
+- Produces: a yes/no answer that gates Task 4 (the IMAP adapter), Task 8 (the Settings form) and Task 9 (the scheduled sweep). No code survives this task.
 
 - [ ] **Step 1: Add the dependency**
 
@@ -108,7 +108,7 @@ curl -s -H "Authorization: Bearer $CRON_SECRET" \
 
 Expected on success: `{"ok":true,"exists":<some number>,"ms":<under 5000>}`
 
-**If `ok` is false and `code` is `ETIMEDOUT` or `ECONNREFUSED`: STOP.** Vercel is blocking outbound IMAP. Report this to Khush and do not continue past Task 3 — the personal mailbox must fall back to a Gmail forwarding filter, which changes Tasks 4b, 7 and 9 and needs a spec amendment first.
+**If `ok` is false and `code` is `ETIMEDOUT` or `ECONNREFUSED`: STOP.** Vercel is blocking outbound IMAP. Report this to Khush and do not continue past Task 3 — the personal mailbox must fall back to a Gmail forwarding filter, which changes Tasks 4, 8 and 9 and needs a spec amendment first.
 
 If `code` is `AUTHENTICATIONFAILED`, the platform is fine; the credential is wrong. Get a fresh app password and retry Step 4.
 
@@ -2224,8 +2224,6 @@ Expected: FAIL — `Cannot find module '../lib/harvest-prompt.js'`
 
 - [ ] **Step 3a: Write the pure half**
 
-Take `MAX_LINES`, `MAX_EMAILS`, `buildPrompt` and `parseProposals` from the code in Step 3b and put them in `lib/harvest-prompt.js` with this header and no imports:
-
 ```js
 // lib/harvest-prompt.js
 /**
@@ -2237,36 +2235,9 @@ Take `MAX_LINES`, `MAX_EMAILS`, `buildPrompt` and `parseProposals` from the code
  * proposal missing a line number is dropped on its own rather than taking the
  * whole response with it.
  */
-```
 
-- [ ] **Step 3b: Write the call and the gate**
-
-```js
-// lib/harvest-ai.js
-import Anthropic from "@anthropic-ai/sdk";
-import { validateProposal } from "./harvest-match.js";
-import { buildPrompt, parseProposals } from "./harvest-prompt.js";
-import { logInfo, logWarn } from "./logger.js";
-
-/**
- * What exact matching cannot see.
- *
- * A ₹1,668 Amazon Pay charge is three orders of ₹555, ₹878 and ₹235, and no
- * single email mentions the total. A ₹957 Swiggy charge is a ₹944 invoice plus
- * a handling fee. These need reading rather than arithmetic — but only to
- * *propose*. Every proposal is then made to add up to the statement line in
- * the line's own currency, and discarded if it does not.
- *
- * The model gets one batched call for the whole cycle, not one per email, and
- * it is never believed. That division — it suggests, the sum decides — is what
- * keeps a fluent wrong answer out of the accounts department.
- */
-
-// Moved to lib/harvest-prompt.js in Step 3a — shown here for context only,
-// do not duplicate them in this file:
-//
-// const MAX_LINES = 60;
-// const MAX_EMAILS = 120;
+const MAX_LINES = 60;
+const MAX_EMAILS = 120;
 
 export function buildPrompt(lines, emails) {
   const lineRows = lines.slice(0, MAX_LINES).map((l) => {
@@ -2329,6 +2300,32 @@ export function parseProposals(raw) {
       .map((x) => ({ messageId: x.messageId, value: Number(x.value), currency: String(x.currency || "") })),
   }));
 }
+```
+
+- [ ] **Step 3b: Write the call and the gate**
+
+`buildPrompt` and `parseProposals` are imported from Step 3a — do not restate them here.
+
+```js
+// lib/harvest-ai.js
+import Anthropic from "@anthropic-ai/sdk";
+import { validateProposal } from "./harvest-match.js";
+import { buildPrompt, parseProposals } from "./harvest-prompt.js";
+import { logInfo, logWarn } from "./logger.js";
+
+/**
+ * What exact matching cannot see.
+ *
+ * A ₹1,668 Amazon Pay charge is three orders of ₹555, ₹878 and ₹235, and no
+ * single email mentions the total. A ₹957 Swiggy charge is a ₹944 invoice plus
+ * a handling fee. These need reading rather than arithmetic — but only to
+ * *propose*. Every proposal is then made to add up to the statement line in
+ * the line's own currency, and discarded if it does not.
+ *
+ * The model gets one batched call for the whole cycle, not one per email, and
+ * it is never believed. That division — it suggests, the sum decides — is what
+ * keeps a fluent wrong answer out of the accounts department.
+ */
 
 export async function resolveLeftovers({ userId, lines, emails }) {
   if (!lines?.length || !emails?.length) return { accepted: [], rejected: [], proposals: 0 };
