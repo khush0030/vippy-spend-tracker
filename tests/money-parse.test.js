@@ -96,3 +96,21 @@ test("deduplicates an amount written with both symbol and code", () => {
   // "€33.90 EUR" is one amount, not two.
   assert.equal(extractAmounts("€33.90 EUR").length, 1);
 });
+
+test("a currency code inside an ordinary word is not a currency", () => {
+  // "hours 30" must not read as Rs 30. Email bodies are full of prose with
+  // numbers in it, and a false positive files the wrong document against a
+  // real charge.
+  assert.deepEqual(extractAmounts("Your order arrives in 2 hours 30 minutes"), []);
+  assert.deepEqual(extractAmounts("Delivery includes 3 stopovers 15 minutes apart"), []);
+  assert.deepEqual(extractAmounts("We have 4 towers 12 floors each"), []);
+  assert.deepEqual(extractAmounts("Supports 25 users 10 seats"), []);
+});
+
+test("genuine currency tokens still match after boundary anchoring", () => {
+  assert.equal(extractAmounts("Rs. 1,694.07")[0].currency, "INR");
+  assert.equal(extractAmounts("Rs 500")[0].currency, "INR");
+  assert.equal(extractAmounts("US$53.22")[0].currency, "USD");
+  assert.equal(extractAmounts("Total CHF 34.40")[0].value, 34.4);
+  assert.equal(extractAmounts("1 473,50 Kč")[0].currency, "CZK");
+});
