@@ -65,6 +65,7 @@ export default function SettingsTab({ session }) {
       <PasswordCard />
       <ConnectionCard />
       <CorporateCardCard />
+      <MailboxesCard />
       <ReceiptBotCard />
       <ActivityCard />
       <AccountCard />
@@ -611,6 +612,244 @@ function CorporateCardCard() {
               {state.saving ? "Saving…" : "Save card"}
             </button>
           </form>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Mailboxes ──
+// Connected email accounts from which the harvester reads invoices. Credentials
+// are write-only and encrypted; they are proved by connecting and never returned.
+function MailboxesCard() {
+  const [data, setData] = useState({ accounts: [], encryptionReady: true, connectUrl: "" });
+  const [form, setForm] = useState({ email: "", app_password: "" });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState({ text: "", type: "" });
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/mail-accounts");
+      if (r.ok) setData(await r.json());
+    } catch (err) {
+      setMsg({ text: "Could not load mailboxes", type: "error" });
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    // Requirement 7: surface ?mailbox= from the OAuth redirect, then clear it.
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get("mailbox");
+    if (outcome) {
+      const reason = params.get("reason");
+      setMsg(
+        outcome === "connected" ? { text: "Mailbox connected.", type: "success" }
+        : outcome === "denied" ? { text: "Google access was declined.", type: "error" }
+        : { text: `Could not connect: ${reason || "unknown error"}`, type: "error" }
+      );
+      params.delete("mailbox");
+      params.delete("reason");
+      const qs = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+    }
+  }, [load]);
+
+  const connectGoogle = async () => {
+    window.location.href = data.connectUrl;
+  };
+
+  const addAppPassword = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setMsg({ text: "", type: "" });
+    try {
+      const r = await fetch("/api/mail-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email, app_password: form.app_password }),
+      });
+      const result = await r.json();
+      if (r.ok) {
+        setForm({ email: "", app_password: "" });
+        await load();
+        setMsg({ text: "Mailbox added.", type: "success" });
+      } else {
+        setMsg({ text: result.error || "Could not add mailbox", type: "error" });
+      }
+    } catch (err) {
+      setMsg({ text: err.message, type: "error" });
+    }
+    setBusy(false);
+  };
+
+  const remove = async (id) => {
+    if (!confirm("Remove this mailbox? The harvester will not read invoices from it again.")) return;
+    setBusy(true);
+    setMsg({ text: "", type: "" });
+    try {
+      const r = await fetch(`/api/mail-accounts?id=${id}`, { method: "DELETE" });
+      if (r.ok) {
+        await load();
+      } else {
+        const result = await r.json();
+        setMsg({ text: result.error || "Could not remove mailbox", type: "error" });
+      }
+    } catch (err) {
+      setMsg({ text: err.message, type: "error" });
+    }
+    setBusy(false);
+  };
+
+  const inputStyle = {
+    padding: "8px 12px",
+    borderRadius: 6,
+    border: "1px solid var(--border)",
+    background: "var(--bg-input)",
+    color: "var(--text)",
+    fontSize: 12,
+    fontFamily: "monospace",
+  };
+
+  const buttonStyle = {
+    padding: "10px 18px",
+    borderRadius: 10,
+    border: "1px solid var(--border)",
+    background: "var(--bg-card-2)",
+    color: "var(--text)",
+    fontSize: 12,
+    fontWeight: 700,
+    fontFamily: "var(--font-display)",
+    cursor: busy ? "default" : "pointer",
+  };
+
+  const badgeStyle = (role) => ({
+    display: "inline-block",
+    padding: "3px 8px",
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 700,
+    background: role === "primary" ? "var(--success-bg)" : "var(--bg-card-2)",
+    color: role === "primary" ? "var(--success)" : "var(--text)",
+  });
+
+  return (
+    <section>
+      <h2 style={sectionLabelStyle}>Mailboxes</h2>
+      <div style={cardStyle}>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
+          Connected email accounts from which the harvester reads invoices.
+        </div>
+
+        {data.encryptionReady ? (
+          <>
+            {/* Requirement 2: List accounts */}
+            {data.accounts && data.accounts.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                {data.accounts.map((account) => (
+                  <div
+                    key={account.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "12px",
+                      marginBottom: 8,
+                      borderRadius: 6,
+                      background: account.status === "revoked" ? "var(--danger-bg)" : "var(--bg-card-2)",
+                      flexWrap: "wrap",
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: account.status === "revoked" ? "var(--danger)" : "var(--text)" }}>
+                        {account.email}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4, display: "flex", gap: 8 }}>
+                        <span style={badgeStyle(account.role)}>
+                          {account.role === "primary" ? "Primary" : "Invoices"}
+                        </span>
+                        <span>{account.auth_kind === "oauth" ? "Google" : "App password"}</span>
+                        {account.status === "revoked" && (
+                          <span style={{ color: "var(--danger)", fontWeight: 700 }}>Reconnect this mailbox — the harvester cannot read it.</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => remove(account.id)}
+                      disabled={busy}
+                      style={buttonStyle}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Requirement 3: Connect Google link */}
+            <div style={{ marginBottom: 16 }}>
+              <a
+                href={data.connectUrl}
+                style={{
+                  color: "var(--brand)",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  textDecoration: "none",
+                }}
+              >
+                Connect Google account
+              </a>
+            </div>
+
+            {/* Requirement 4: App password form */}
+            <form onSubmit={addAppPassword} style={{ marginBottom: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4, color: "var(--text-secondary)" }}>
+                  Add app-password mailbox
+                </label>
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
+                  disabled={busy}
+                />
+                <input
+                  type="password"
+                  placeholder="App password"
+                  value={form.app_password}
+                  onChange={(e) => setForm({ ...form, app_password: e.target.value })}
+                  style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
+                  disabled={busy}
+                />
+                <button
+                  type="submit"
+                  disabled={busy || !form.email || !form.app_password}
+                  style={{ ...buttonStyle, opacity: busy || !form.email || !form.app_password ? 0.5 : 1 }}
+                >
+                  {busy ? "Adding…" : "Add mailbox"}
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <div style={{ fontSize: 13, color: "var(--warning)", padding: 12, background: "var(--warning-bg)", borderRadius: 6 }}>
+            Set STATEMENT_PW_KEY before connecting a mailbox.
+          </div>
+        )}
+
+        {msg.text && (
+          <div
+            style={{
+              fontSize: 12,
+              color: msg.type === "error" ? "var(--danger)" : msg.type === "success" ? "var(--success)" : "var(--text)",
+              marginTop: 12,
+            }}
+          >
+            {msg.text}
+          </div>
         )}
       </div>
     </section>

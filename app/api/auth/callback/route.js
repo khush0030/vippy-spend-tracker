@@ -1,34 +1,72 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { getTokensFromCode } from "@/lib/gmail";
+import { saveMailAccount, listMailAccounts } from "@/lib/mail-account";
+import { logError, logInfo } from "@/lib/logger";
 
+export const dynamic = "force-dynamic";
+
+/**
+ * Where Google returns after consent.
+ *
+ * This used to render the refresh token as HTML so it could be pasted into
+ * .env.local by hand. A long-lived mailbox credential in a page, a
+ * scrollback or a screenshot is a credential leaked, so it is encrypted and
+ * stored now and never sent to a browser at all.
+ */
 export async function GET(request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.redirect(new URL("/", request.url));
+
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code");
+  const denied = searchParams.get("error");
+
+  const back = (params) => {
+    const url = new URL("/", request.url);
+    url.hash = "settings";
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    return NextResponse.redirect(url);
+  };
+
+  if (denied) return back({ mailbox: "denied" });
+  if (!code) return back({ mailbox: "error", reason: "no code returned" });
+
   try {
-    const { searchParams } = new URL(request.url);
-    const code = searchParams.get("code");
-
-    if (!code) {
-      return NextResponse.json({ error: "No code provided" }, { status: 400 });
-    }
-
     const tokens = await getTokensFromCode(code);
 
-    // Display the refresh token so the user can add it to .env.local
-    return new NextResponse(
-      `<html>
-        <body style="font-family: sans-serif; padding: 40px; max-width: 600px; margin: 0 auto;">
-          <h2>Google OAuth Success</h2>
-          <p>Add this refresh token to your <code>.env.local</code> file:</p>
-          <pre style="background: #f5f5f5; padding: 16px; border-radius: 8px; word-break: break-all;">${tokens.refresh_token || "No refresh token returned (you may already have one)"}</pre>
-          <p style="margin-top: 16px;"><a href="/" style="color: #2196F3;">Back to Dashboard</a></p>
-        </body>
-      </html>`,
-      { headers: { "Content-Type": "text/html" } }
-    );
-  } catch (error) {
-    console.error("Callback error:", error);
-    return NextResponse.json(
-      { error: "OAuth callback failed: " + error.message },
-      { status: 500 }
-    );
+    // Google withholds the refresh token when this account has already granted
+    // consent. prompt=consent in getAuthUrl() is what forces a fresh one.
+    if (!tokens.refresh_token) {
+      return back({ mailbox: "error", reason: "no refresh token — revoke access at myaccount.google.com/permissions and retry" });
+    }
+
+    const email = tokens.id_token
+      ? JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64").toString()).email
+      : null;
+    if (!email) return back({ mailbox: "error", reason: "Google did not identify the account" });
+
+    // The first mailbox connected becomes the primary one, since bank alerts
+    // and the statement have to come from somewhere.
+    const existing = await listMailAccounts(session.user.id);
+    const role = existing.some((a) => a.role === "primary") ? "invoices" : "primary";
+
+    await saveMailAccount(session.user.id, {
+      email, auth_kind: "oauth", credential: tokens.refresh_token, role,
+    });
+
+    await logInfo({
+      source: "mailbox", event: "connected", userId: session.user.id,
+      message: `Connected ${email} as ${role}`,
+    });
+
+    return back({ mailbox: "connected" });
+  } catch (err) {
+    await logError({
+      source: "mailbox", event: "connect_failed", userId: session.user.id,
+      message: "OAuth callback failed", error: err,
+    });
+    return back({ mailbox: "error", reason: err.message });
   }
 }
