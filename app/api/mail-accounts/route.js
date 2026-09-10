@@ -1,10 +1,11 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { hasEncryptionKey } from "@/lib/secret-box";
 import {
   listMailAccounts, saveMailAccount, removeMailAccount,
-  getMailAccount, validateAccountInput,
+  getMailAccount, validateAccountInput, OAUTH_STATE_COOKIE,
 } from "@/lib/mail-account";
 import { openMailbox } from "@/lib/mailbox";
 import { getAuthUrl } from "@/lib/gmail";
@@ -19,11 +20,27 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  return NextResponse.json({
+  // A random per-request state, echoed back by Google and checked against
+  // this cookie in the callback, is what stops a login-CSRF: without it an
+  // attacker's own authorization code could be walked into a signed-in
+  // victim's browser and get bound to the victim's account.
+  const state = crypto.randomBytes(16).toString("hex");
+
+  const response = NextResponse.json({
     accounts: await listMailAccounts(session.user.id),
     encryptionReady: hasEncryptionKey(),
-    connectUrl: getAuthUrl(),
+    connectUrl: getAuthUrl(state),
   });
+
+  response.cookies.set(OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 600,
+    path: "/",
+  });
+
+  return response;
 }
 
 export async function POST(request) {
@@ -76,6 +93,10 @@ export async function DELETE(request) {
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-  await removeMailAccount(session.user.id, id);
+  try {
+    await removeMailAccount(session.user.id, id);
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
   return NextResponse.json({ ok: true });
 }

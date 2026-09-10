@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getTokensFromCode } from "@/lib/gmail";
-import { saveMailAccount, listMailAccounts } from "@/lib/mail-account";
+import { saveMailAccount, listMailAccounts, OAUTH_STATE_COOKIE } from "@/lib/mail-account";
 import { logError, logInfo } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -22,16 +22,27 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const denied = searchParams.get("error");
+  const state = searchParams.get("state");
+  const cookieState = request.cookies.get(OAUTH_STATE_COOKIE)?.value;
 
   const back = (params) => {
     const url = new URL("/", request.url);
     url.hash = "settings";
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-    return NextResponse.redirect(url);
+    const response = NextResponse.redirect(url);
+    response.cookies.delete(OAUTH_STATE_COOKIE);
+    return response;
   };
 
   if (denied) return back({ mailbox: "denied" });
   if (!code) return back({ mailbox: "error", reason: "no code returned" });
+
+  // Login-CSRF guard: without matching this cookie against the state Google
+  // echoes back, an attacker can walk their own authorization code into a
+  // signed-in victim's browser and have it bound to the victim's account.
+  if (!state || !cookieState || state !== cookieState) {
+    return back({ mailbox: "error", reason: "state mismatch — start the connection again from Settings" });
+  }
 
   try {
     const tokens = await getTokensFromCode(code);

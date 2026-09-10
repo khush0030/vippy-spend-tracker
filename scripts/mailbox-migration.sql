@@ -45,6 +45,11 @@ alter table receipts add column if not exists source_account  text;
 create index if not exists receipts_mail_msg_idx
   on receipts (user_id, mail_message_id) where mail_message_id is not null;
 
+-- Harvested documents are linked by a fourth path. Idempotent: drop-then-add.
+alter table receipt_transactions drop constraint if exists receipt_transactions_matched_by_check;
+alter table receipt_transactions add constraint receipt_transactions_matched_by_check
+  check (matched_by in ('auto','user','rematch','statement','admin','harvest'));
+
 -- Deny-all RLS for anon, matching scripts/receipt-rail-migration.sql. The app
 -- talks to Supabase with the service role and scopes by user_id itself,
 -- because it authenticates with NextAuth so auth.uid() is never populated.

@@ -11,6 +11,7 @@ import { runNudge } from "@/lib/nudge";
 import { runStatementJob } from "@/lib/statement-recon";
 import { harvestCycle } from "@/lib/harvest";
 import { checkMailboxes } from "@/lib/mailbox-health";
+import { primaryMailAccount } from "@/lib/mail-account";
 import { logError, logInfo } from "@/lib/logger";
 
 export const maxDuration = 300;
@@ -120,9 +121,15 @@ export async function GET(request) {
 }
 
 async function runJob(job, user) {
+  // The mail_accounts row is authoritative when present; the env var in
+  // lib/gmail.js stays as the fallback for users with no row, so this
+  // changes nothing when nothing has been connected.
+  const primary = await primaryMailAccount(user.id).catch(() => null);
+  const refreshToken = primary?.credential ?? null;
+
   switch (job) {
     case "sync": {
-      const r = await syncUserTransactions({ userId: user.id });
+      const r = await syncUserTransactions({ userId: user.id, refreshToken });
       // A sync that fails quietly is how the ledger went two months stale, so
       // the health check runs on the way out rather than on its own schedule.
       const health = await alertIfSyncUnhealthy(user.id, {
@@ -154,7 +161,7 @@ async function runJob(job, user) {
       // Ingest whatever HDFC sent, reconcile it, and post the verdict in chat.
       // Idempotent: a statement already on file is skipped, so a manual
       // ?job=statement on the 19th is safe.
-      return runStatementJob({ userId: user.id });
+      return runStatementJob({ userId: user.id, refreshToken });
     }
 
     case "submit": {
@@ -178,11 +185,14 @@ async function runJob(job, user) {
 
       // Nothing to look for until the bank has told us what was charged.
       if (!statement) return { skipped: "no reconciled statement yet" };
+      // Falling back to the open cycle would sweep invoices against the
+      // wrong cycle's statement lines when the statement isn't linked yet.
+      if (!statement.cycle_id) return { skipped: "statement not linked to a cycle" };
 
       const { data: cycleRow } = await getSupabaseAdmin()
         .from("statement_cycles")
         .select("*, card:card_accounts(*)")
-        .eq("id", statement.cycle_id ?? cycle.id)
+        .eq("id", statement.cycle_id)
         .maybeSingle();
 
       const summary = await harvestCycle({

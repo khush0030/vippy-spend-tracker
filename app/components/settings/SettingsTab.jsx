@@ -655,10 +655,6 @@ function MailboxesCard() {
     }
   }, [load]);
 
-  const connectGoogle = async () => {
-    window.location.href = data.connectUrl;
-  };
-
   const addAppPassword = async (e) => {
     e.preventDefault();
     setBusy(true);
