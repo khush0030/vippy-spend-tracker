@@ -75,3 +75,19 @@ test("a body with no text at all still produces a document", async () => {
   assert.equal(out.kind, "typeset");
   assert.equal(out.buffer.subarray(0, 5).toString(), "%PDF-");
 });
+
+test("an attachment record with no bytes is skipped, not crashed on", () => {
+  // A part that failed to decode arrives as metadata with no content.
+  const ghost = { filename: "invoice.pdf", contentType: "application/pdf" };
+  assert.equal(pickAttachment(message({ attachments: [ghost] })), null);
+
+  // And it must not win a comparison against a real one.
+  const real = pdf({ filename: "real.pdf", size: 3000, content: Buffer.alloc(3000) });
+  assert.equal(pickAttachment(message({ attachments: [ghost, real] })).filename, "real.pdf");
+});
+
+test("size is taken from the content when the parser omitted it", () => {
+  const noSize = { filename: "a.pdf", contentType: "application/pdf", content: Buffer.alloc(5000) };
+  const withSize = pdf({ filename: "b.pdf", size: 2000, content: Buffer.alloc(2000) });
+  assert.equal(pickAttachment(message({ attachments: [withSize, noSize] })).filename, "a.pdf");
+});
