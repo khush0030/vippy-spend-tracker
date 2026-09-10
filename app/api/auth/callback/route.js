@@ -43,14 +43,20 @@ export async function GET(request) {
     }
 
     const email = tokens.id_token
-      ? JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64").toString()).email
+      ? JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64url").toString()).email?.toLowerCase() || null
       : null;
     if (!email) return back({ mailbox: "error", reason: "Google did not identify the account" });
 
     // The first mailbox connected becomes the primary one, since bank alerts
     // and the statement have to come from somewhere.
     const existing = await listMailAccounts(session.user.id);
-    const role = existing.some((a) => a.role === "primary") ? "invoices" : "primary";
+    const already = existing.find((a) => a.email === email);
+    // Re-connecting a mailbox keeps its role: an expired token on the primary
+    // account must not demote it. A new mailbox becomes primary only when
+    // nothing else is, since bank alerts have to come from somewhere.
+    const role = already
+      ? already.role
+      : existing.some((a) => a.role === "primary") ? "invoices" : "primary";
 
     await saveMailAccount(session.user.id, {
       email, auth_kind: "oauth", credential: tokens.refresh_token, role,
