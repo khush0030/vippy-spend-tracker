@@ -4,7 +4,7 @@ import { parseModelRef, stripJsonFence, chatJson } from "../lib/llm.js";
 
 test("model refs carry their provider", () => {
   assert.deepEqual(parseModelRef("sarvam:sarvam-105b"), { provider: "sarvam", model: "sarvam-105b" });
-  assert.deepEqual(parseModelRef("openai:gpt-5.6-mini"), { provider: "openai", model: "gpt-5.6-mini" });
+  assert.deepEqual(parseModelRef("openai:gpt-5.4-mini"), { provider: "openai", model: "gpt-5.4-mini" });
   assert.throws(() => parseModelRef("claude-sonnet-5"), /Unknown model ref/);
   assert.throws(() => parseModelRef("anthropic:claude-opus-5"), /Unknown model ref/);
   assert.throws(() => parseModelRef(""), /Unknown model ref/);
@@ -47,7 +47,7 @@ test("sarvam refs go to api.sarvam.ai with the subscription-key header", async (
 test("openai refs go to api.openai.com with a bearer token and no system message when none is given", async () => {
   process.env.OPENAI_API_KEY = "oa-test";
   const { fetch, calls } = fakeFetch(() => ok({ choices: [{ message: { content: "[]" } }] }));
-  const res = await chatJson({ ref: "openai:gpt-5.6-mini", user: "usr", fetch });
+  const res = await chatJson({ ref: "openai:gpt-5.4-mini", user: "usr", fetch });
   assert.equal(res.text, "[]");
   assert.equal(calls[0].url, "https://api.openai.com/v1/chat/completions");
   assert.equal(calls[0].init.headers.Authorization, "Bearer oa-test");
@@ -75,4 +75,23 @@ test("a missing api key is reported before any request is made", async () => {
   const { fetch, calls } = fakeFetch(() => ok({}));
   await assert.rejects(chatJson({ ref: "sarvam:sarvam-105b", user: "u", fetch }), /SARVAM_API_KEY is not set/);
   assert.equal(calls.length, 0);
+});
+
+test("think: false turns Sarvam reasoning off; OpenAI requests never carry the field", async () => {
+  process.env.SARVAM_API_KEY = "sk-test";
+  process.env.OPENAI_API_KEY = "oa-test";
+  const { fetch, calls } = fakeFetch(() => ok({ choices: [{ message: { content: "[]" } }] }));
+  await chatJson({ ref: "sarvam:sarvam-105b", user: "u", think: false, fetch });
+  await chatJson({ ref: "sarvam:sarvam-105b", user: "u", fetch });
+  await chatJson({ ref: "openai:gpt-5.4-mini", user: "u", think: false, fetch });
+  assert.equal("reasoning_effort" in calls[0].body, true);
+  assert.equal(calls[0].body.reasoning_effort, null);
+  assert.equal("reasoning_effort" in calls[1].body, false);
+  assert.equal("reasoning_effort" in calls[2].body, false);
+});
+
+test("an answer cut off by the token ceiling says so", async () => {
+  process.env.SARVAM_API_KEY = "sk-test";
+  const { fetch } = fakeFetch(() => ok({ choices: [{ finish_reason: "length", message: { content: null, reasoning_content: "..." } }] }));
+  await assert.rejects(chatJson({ ref: "sarvam:sarvam-105b", user: "u", fetch }), /returned no text \(finish_reason: length\)/);
 });

@@ -17,7 +17,7 @@ The end state uses two vendors, neither of them Anthropic.
 
 | Job | File | Input | Today | After |
 |---|---|---|---|---|
-| Bank-alert parsing | `lib/sync.js` | text | `claude-sonnet-5` | `sarvam-105b`, fallback `gpt-5.6-mini` |
+| Bank-alert parsing | `lib/sync.js` | text | `claude-sonnet-5` | `sarvam-105b`, fallback `gpt-5.4-mini` |
 | Harvest leftovers | `lib/harvest-ai.js` | text | `claude-opus-5` → `claude-sonnet-5` | `sarvam-105b`, fallback `gpt-5.6` |
 | Receipt consensus | `lib/receipt-vision.js` | image/PDF | A `claude-sonnet-5`, B `gpt-5.6`, tiebreak `claude-opus-5` | A `gpt-5.6`, B Sarvam Extract, tiebreak `gpt-5.6` at `reasoning.effort: "high"` |
 | Statement transcription | `lib/statement-vision.js` | PDF | `claude-opus-5` → `claude-sonnet-5` | `gpt-5.6`, fallback Sarvam Digitise → `sarvam-105b` |
@@ -106,7 +106,7 @@ the statement, as they do today.
 
 ```
 SARVAM_API_KEY=
-SYNC_MODEL=sarvam:sarvam-105b            SYNC_MODEL_FALLBACK=openai:gpt-5.6-mini
+SYNC_MODEL=sarvam:sarvam-105b            SYNC_MODEL_FALLBACK=openai:gpt-5.4-mini
 HARVEST_MODEL=sarvam:sarvam-105b         HARVEST_MODEL_FALLBACK=openai:gpt-5.6
 VISION_MODEL_A=openai:gpt-5.6            VISION_MODEL_B=sarvam:extract
 VISION_MODEL_TIEBREAK=openai:gpt-5.6
