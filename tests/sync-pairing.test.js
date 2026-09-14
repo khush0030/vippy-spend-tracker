@@ -12,6 +12,17 @@ test("rows are paired by the email id the model echoes, not by position", () => 
   assert.deepEqual(out.map(([r, e]) => [r.amount, e.id]), [[100, "e1"], [300, "e3"]]);
 });
 
+test("a duplicate emailId keeps only the first row, so the upsert doesn't collide", () => {
+  const dupeBatch = [{ id: "e1" }, { id: "e2" }];
+  const parsed = [
+    { emailId: "e1", amount: 1 },
+    { emailId: "e1", amount: 2 },
+    { emailId: "e2", amount: 3 },
+  ];
+  const out = pairRowsWithEmails(parsed, dupeBatch);
+  assert.deepEqual(out.map(([r]) => r.amount), [1, 3]);
+});
+
 test("a row naming an email that was not in the batch is dropped", () => {
   const parsed = [{ emailId: "e1", amount: 100 }, { emailId: "zzz", amount: 5 }];
   assert.deepEqual(pairRowsWithEmails(parsed, batch).map(([r]) => r.amount), [100]);
