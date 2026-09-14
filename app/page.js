@@ -78,6 +78,10 @@ const PRESETS = [
   { value: 0, label: "All" },
 ];
 
+// Browser-local calendar date; toISOString() would give the UTC date, which
+// is still yesterday for the first 5.5 hours of every IST morning.
+const localYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 function relTime(iso) {
   if (!iso) return null;
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -422,8 +426,8 @@ export default function Home() {
     else {
       const e = new Date(), s = new Date();
       s.setDate(s.getDate() - d);
-      setStartDate(s.toISOString().split("T")[0]);
-      setEndDate(e.toISOString().split("T")[0]);
+      setStartDate(localYmd(s));
+      setEndDate(localYmd(e));
     }
   }, []);
 

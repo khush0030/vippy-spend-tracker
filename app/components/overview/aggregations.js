@@ -167,7 +167,9 @@ export const fmtINRcompact = (n) => {
   return `₹${Math.round(n)}`;
 };
 
-const ymd = (d) => d.toISOString().slice(0, 10);
+// Local calendar date, not toISOString(): in UTC+ zones the UTC date lags a
+// local midnight by a day, so addDays would hand back the same date forever.
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (iso, n) => {
   const d = parseDate(iso);
   d.setDate(d.getDate() + n);
