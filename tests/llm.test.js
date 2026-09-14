@@ -52,7 +52,8 @@ test("openai refs go to api.openai.com with a bearer token and no system message
   assert.equal(calls[0].url, "https://api.openai.com/v1/chat/completions");
   assert.equal(calls[0].init.headers.Authorization, "Bearer oa-test");
   assert.deepEqual(calls[0].body.messages, [{ role: "user", content: "usr" }]);
-  assert.equal(calls[0].body.max_tokens, 4096);
+  assert.equal(calls[0].body.max_completion_tokens, 4096);
+  assert.equal("max_tokens" in calls[0].body, false);
 });
 
 test("a non-2xx answer becomes an error naming the provider and status", async () => {
@@ -77,7 +78,7 @@ test("a missing api key is reported before any request is made", async () => {
   assert.equal(calls.length, 0);
 });
 
-test("think: false turns Sarvam reasoning off; OpenAI requests never carry the field", async () => {
+test("think: false turns Sarvam reasoning off; OpenAI switches to a low reasoning_effort", async () => {
   process.env.SARVAM_API_KEY = "sk-test";
   process.env.OPENAI_API_KEY = "oa-test";
   const { fetch, calls } = fakeFetch(() => ok({ choices: [{ message: { content: "[]" } }] }));
@@ -87,11 +88,17 @@ test("think: false turns Sarvam reasoning off; OpenAI requests never carry the f
   assert.equal("reasoning_effort" in calls[0].body, true);
   assert.equal(calls[0].body.reasoning_effort, null);
   assert.equal("reasoning_effort" in calls[1].body, false);
-  assert.equal("reasoning_effort" in calls[2].body, false);
+  assert.equal(calls[2].body.reasoning_effort, "low");
 });
 
 test("an answer cut off by the token ceiling says so", async () => {
   process.env.SARVAM_API_KEY = "sk-test";
   const { fetch } = fakeFetch(() => ok({ choices: [{ finish_reason: "length", message: { content: null, reasoning_content: "..." } }] }));
   await assert.rejects(chatJson({ ref: "sarvam:sarvam-105b", user: "u", fetch }), /returned no text \(finish_reason: length\)/);
+});
+
+test("truncated but non-empty content is reported as truncated, not accepted", async () => {
+  process.env.SARVAM_API_KEY = "sk-test";
+  const { fetch } = fakeFetch(() => ok({ choices: [{ finish_reason: "length", message: { content: "partial answer" } }] }));
+  await assert.rejects(chatJson({ ref: "sarvam:sarvam-105b", user: "u", fetch }), /output truncated \(finish_reason: length\)/);
 });
