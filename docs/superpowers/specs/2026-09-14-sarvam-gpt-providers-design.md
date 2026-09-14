@@ -2,8 +2,8 @@
 
 **Date:** 2026-09-14
 **Status:** approved
-**Scope:** replace every Anthropic call with Sarvam (text, document OCR/extraction) or OpenAI
-(vision), behind environment switches, with Claude defaults kept until each job is cut over.
+**Scope:** remove Anthropic from the application entirely. Every model call goes to Sarvam
+(text, document OCR/extraction) or OpenAI (vision). No Claude code path survives.
 
 ## Why
 
@@ -22,9 +22,10 @@ The end state uses two vendors, neither of them Anthropic.
 | Receipt consensus | `lib/receipt-vision.js` | image/PDF | A `claude-sonnet-5`, B `gpt-5.6`, tiebreak `claude-opus-5` | A `gpt-5.6`, B Sarvam Extract, tiebreak `gpt-5.6` at `reasoning.effort: "high"` |
 | Statement transcription | `lib/statement-vision.js` | PDF | `claude-opus-5` → `claude-sonnet-5` | `gpt-5.6`, fallback Sarvam Digitise → `sarvam-105b` |
 
-Every choice is an environment variable with the *current* Claude model as its default, so the
-deployed app changes nothing until a variable is set. The Anthropic client and SDK are removed
-only in the final step, after every default has been flipped.
+Every choice is an environment variable whose default is the Sarvam/OpenAI model in the table.
+`@anthropic-ai/sdk`, every `new Anthropic(...)`, `callAnthropic`, and `ANTHROPIC_API_KEY` are
+deleted in the same change. There is no `anthropic:` provider in `parseModelRef`; a ref naming
+one is an error.
 
 ## Component 1 — `lib/llm.js`, one text-chat door
 
@@ -86,9 +87,8 @@ conflict. What changes is who reads.
   read, not a judgement of A and B. This is the same family as A; that is an accepted loss of
   independence, recorded in the audit trail as `modelsUsed`.
 
-The reader is chosen by the provider prefix of the env var, so `VISION_MODEL_B=sarvam:extract`
-selects the Sarvam path and `openai:gpt-5.6` or `anthropic:claude-sonnet-5` select the others
-while Anthropic still exists.
+The reader is chosen by the provider prefix of the env var: `sarvam:extract` selects the Sarvam
+path, `openai:<model>` the Responses API path.
 
 ## Component 4 — statement transcription on GPT
 
@@ -113,21 +113,24 @@ VISION_MODEL_TIEBREAK=openai:gpt-5.6
 STATEMENT_MODEL=openai:gpt-5.6           STATEMENT_MODEL_FALLBACK=sarvam:digitise
 ```
 
-Until set, each defaults to today's `anthropic:` value. `ANTHROPIC_API_KEY` and
-`@anthropic-ai/sdk` are deleted in the last task, together with the `anthropic:` branch.
+These are also the in-code defaults. `ANTHROPIC_API_KEY` is removed from `.env.local`,
+`.env.local.example`, and Vercel.
 
-## Cutover, one job at a time
+## Verification before deploy
 
-1. **Sync** — replay the last 30 days of HDFC alert emails through `sarvam-105b` with a script,
-   diff the JSON against the `transactions` rows Claude produced. Flip `SYNC_MODEL` only when
-   the diff is empty or every difference is Sarvam being right.
-2. **Harvest leftovers** — flip; the sum check makes a wrong proposal harmless.
-3. **Receipts** — run the Sarvam reader over the receipts already on file and compare against
-   the stored consensus values. Flip when the agreement rate is at least what Claude-vs-GPT
-   achieved (the `consensus` field on existing rows gives the baseline).
+One branch, one deploy, Anthropic gone. Before that deploy, replay scripts prove each job on
+real data already in the database:
+
+1. **Sync** — replay the last 30 days of HDFC alert emails through `sarvam-105b`, diff the JSON
+   against the `transactions` rows on file. Ship when the diff is empty or every difference is
+   Sarvam being right.
+2. **Harvest leftovers** — no replay needed; the sum check makes a wrong proposal harmless.
+3. **Receipts** — run the Sarvam reader and the GPT reader over the receipts already on file
+   and compare against the stored values. The agreement rate must be at least what the stored
+   `consensus` field shows for the current pair.
 4. **Statement** — run GPT over the two reconciled statements on file; both must pass tie-out.
-   Flip.
-5. Remove Anthropic.
+
+A job that fails its replay blocks the deploy; it does not fall back to Claude.
 
 ## Testing
 
