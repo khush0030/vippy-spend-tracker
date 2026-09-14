@@ -1,11 +1,11 @@
 # Vippy Spend Tracker
 
-Internal expense tracker for HDFC corporate card transactions at **Vippy Industries**. Connects to Gmail, parses transaction alerts using Claude AI, and displays a visual dashboard with spending insights.
+Internal expense tracker for HDFC corporate card transactions at **Vippy Industries**. Connects to Gmail, parses transaction alerts using Sarvam-105B (with GPT-5.6 fallback), and displays a visual dashboard with spending insights.
 
 ## Features
 
 - **Gmail Sync** — Fetches HDFC bank alerts, Amazon orders, Swiggy/Zomato receipts, and refund emails
-- **AI Parsing** — Claude extracts merchant, amount, date, category, item descriptions, and transaction notes
+- **AI Parsing** — Sarvam-105B extracts merchant, amount, date, category, item descriptions, and transaction notes, with GPT-5.6 as fallback
 - **Multi-user Auth** — Google OAuth with NextAuth, user-scoped data isolation
 - **Dashboard** — Donut chart, bar chart, spending insights (top category, daily avg, most frequent merchant)
 - **Date Filtering** — Date range picker with presets (7D, 30D, 90D, 1Y, All)
@@ -26,7 +26,7 @@ Browser (Next.js App)
     |
     |── Sync Gmail ──> POST /api/sync
     |                      |── Gmail API (fetch emails)
-    |                      |── Claude API (parse → structured data)
+    |                      |── Sarvam-105B (parse → structured data), GPT-5.6 fallback
     |                      |── Supabase (store per-user)
     |
     |── Dashboard ──> GET /api/transactions
@@ -42,7 +42,7 @@ Browser (Next.js App)
 | Framework | Next.js 14 (App Router) |
 | Auth | NextAuth v4 + Google OAuth |
 | Email | Gmail API via `googleapis` |
-| AI | Anthropic Claude API (`claude-sonnet-4-20250514`) |
+| AI | Sarvam-105B (`sarvam:sarvam-105b`), GPT-5.6 fallback (`openai:gpt-5.6`) |
 | Database | Supabase (PostgreSQL) |
 | Charts | Chart.js + react-chartjs-2 |
 | Styling | CSS variables + inline styles (no framework) |
@@ -52,7 +52,7 @@ Browser (Next.js App)
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/sync` | POST | Gmail → Claude → Supabase (auth required) |
+| `/api/sync` | POST | Gmail → Sarvam-105B/GPT-5.6 → Supabase (auth required) |
 | `/api/transactions` | GET | Load user's transactions |
 | `/api/transactions` | PATCH | Update receipt status or user notes |
 | `/api/transactions/claim` | POST | Claim orphaned transactions |
@@ -86,7 +86,8 @@ create table transactions (
 ## Environment Variables
 
 ```
-ANTHROPIC_API_KEY        — Claude API key
+SARVAM_API_KEY           — Sarvam API key (text parsing, document extraction)
+OPENAI_API_KEY           — OpenAI API key (vision reads, text fallback)
 GOOGLE_CLIENT_ID         — Google OAuth client ID
 GOOGLE_CLIENT_SECRET     — Google OAuth client secret
 GOOGLE_REFRESH_TOKEN     — Gmail refresh token
@@ -127,7 +128,7 @@ app/
   page.js                         — Dashboard (all tabs, charts, modals)
   providers.js                    — NextAuth SessionProvider
   login/page.js                   — Login page
-  api/sync/route.js               — Gmail + Claude + Supabase sync
+  api/sync/route.js               — Gmail + Sarvam/GPT + Supabase sync
   api/transactions/route.js       — CRUD transactions
   api/transactions/claim/route.js — Claim orphaned transactions
   api/reports/route.js            — CSV/JSON report generation
