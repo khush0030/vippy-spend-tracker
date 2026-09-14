@@ -53,6 +53,8 @@ test("openai refs go to api.openai.com with a bearer token and no system message
   assert.equal(calls[0].init.headers.Authorization, "Bearer oa-test");
   assert.deepEqual(calls[0].body.messages, [{ role: "user", content: "usr" }]);
   assert.equal(calls[0].body.max_completion_tokens, 4096);
+  // GPT reasoning models reject any temperature but the default.
+  assert.equal("temperature" in calls[0].body, false);
   assert.equal("max_tokens" in calls[0].body, false);
 });
 
