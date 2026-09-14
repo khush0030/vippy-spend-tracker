@@ -36,13 +36,13 @@ chatJson({ provider, model, system, user, maxTokens, temperature })
   // -> { text, model, provider }
 ```
 
-- `provider: "sarvam"` → `new OpenAI({ apiKey: SARVAM_API_KEY, baseURL: "https://api.sarvam.ai/v1" })`.
-  Sarvam accepts `Authorization: Bearer` for OpenAI-compatible tooling. Default `max_tokens`
-  there is 2048, so it is always passed explicitly; reasoning tokens count against it.
-- `provider: "openai"` → the same SDK with the default base URL. (`openai` becomes a dependency;
-  the existing vision code calls the Responses API with raw `fetch` and keeps doing so.) Uses
-  `chat.completions` too; the Responses API stays
-  only in the vision paths, which need `input_file` / `input_image`.
+- `provider: "sarvam"` → `POST https://api.sarvam.ai/v1/chat/completions` with the
+  `api-subscription-key` header. Default `max_tokens` there is 2048, so it is always passed
+  explicitly; reasoning tokens count against it.
+- `provider: "openai"` → `POST https://api.openai.com/v1/chat/completions` with a bearer token.
+  The Responses API stays only in the vision paths, which need `input_file` / `input_image`.
+- Raw `fetch` for both, as the existing vision code already does; no vendor SDK. `fetch` is an
+  injectable parameter so the module is testable without a network.
 - Model strings carry their provider as a prefix, `sarvam:sarvam-105b`, `openai:gpt-5.6`, so a
   single env var names both. `parseModelRef("sarvam:sarvam-105b")` → `{ provider, model }`. A
   bare name with no prefix is an error, not a guess.
@@ -63,8 +63,8 @@ extractFields(buffer, mime, { schema, language = "en-IN", timeoutMs })  // -> pa
 digitise(buffer, mime, { timeoutMs })                                     // -> markdown string
 ```
 
-Uses the `sarvamai` npm client (`client.docAi.extract` / `digitise`, `getStatus`,
-`getDownloadUrl`). Polls every 3 s; terminal statuses are `completed`, `partially_completed`,
+Raw `fetch` against `POST /doc-ai/v1/job/{extract|digitise}` (multipart), `GET
+/job/{id}/status`, `GET /job/{id}/download-url`. Polls every 3 s; terminal statuses are `completed`, `partially_completed`,
 `failed`, `rejected`. Anything but `completed` throws — a partially read receipt is not a
 second opinion. `lib/zip.js` only writes archives, so the download is opened with `jszip`
 (new dependency); the JSON file inside is the result. Limits enforced before upload:
