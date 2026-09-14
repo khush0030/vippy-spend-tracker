@@ -62,3 +62,30 @@ test("merchant name comes from the display name, else from the sender's domain",
   assert.equal(merchantFrom({ from: "", subject: "Your order" }), "Your order");
   assert.equal(merchantFrom({}), "Unknown");
 });
+
+test("the bank's own alerts are never candidates, whatever amount they state", () => {
+  // Every charge produces an InstaAlert (and often an OTP mail) quoting the
+  // exact amount. Storing those as receipts would mark every line covered by
+  // a document that is not an invoice.
+  const alert = candidateFrom({
+    messageId: "a1", date: "2026-07-20",
+    from: '"HDFC Bank InstaAlerts" <alerts@hdfcbank.bank.in>',
+    subject: "A payment was made using your Credit Card",
+    text: "Rs 415.06 was spent on your card at UBER",
+  });
+  assert.equal(alert, null);
+
+  const otp = candidateFrom({
+    messageId: "a2", date: "2026-07-20",
+    from: "alertsdc@hdfcbank.net",
+    subject: "OTP For online Ecom Transaction",
+    text: "Your OTP for INR 34.40 is 123456",
+  });
+  assert.equal(otp, null);
+
+  const real = candidateFrom({
+    messageId: "a3", date: "2026-07-20",
+    from: "noreply@instamart.in", subject: "Tax invoice", text: "Total ₹957",
+  });
+  assert.equal(real.amounts.length, 1);
+});
