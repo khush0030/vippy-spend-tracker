@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { searchWindow, candidateFrom } from "../lib/harvest-plan.js";
+import { searchWindow, candidateFrom, merchantFrom } from "../lib/harvest-plan.js";
 
 test("the search window overhangs the cycle at both ends", () => {
   // Two days early because a receipt precedes its charge; five days late
@@ -51,4 +51,14 @@ test("duplicate amounts are collapsed", () => {
 
 test("a message with no date yields no candidate", () => {
   assert.equal(candidateFrom({ messageId: "m5", date: null, text: "€10.00" }), null);
+});
+
+test("merchant name comes from the display name, else from the sender's domain", () => {
+  assert.equal(merchantFrom({ from: "Uber Receipts <noreply@uber.com>" }), "Uber Receipts");
+  assert.equal(merchantFrom({ from: '"Zomato Order" <order@zomato.com>' }), "Zomato Order");
+  // Instamart sends with no display name at all.
+  assert.equal(merchantFrom({ from: "noreply@instamart.in" }), "Instamart");
+  assert.equal(merchantFrom({ from: "<billing@getyourguide.com>" }), "Getyourguide");
+  assert.equal(merchantFrom({ from: "", subject: "Your order" }), "Your order");
+  assert.equal(merchantFrom({}), "Unknown");
 });
