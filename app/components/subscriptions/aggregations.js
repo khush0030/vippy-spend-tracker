@@ -39,11 +39,11 @@ export function buildSubscriptions(allTransactions) {
 }
 
 export const CYCLE_COLORS = {
-  monthly: "#7C3AED",
-  quarterly: "#0EA5E9",
-  annual: "#10B981",
-  irregular: "#F59E0B",
-  "one-time": "#64748B",
+  monthly: "#1F9AA8",
+  quarterly: "#2F6FAE",
+  annual: "#3B8F5A",
+  irregular: "#C27C0E",
+  "one-time": "#7A8A94",
 };
 
 export function upcoming30Days(subs, today = new Date()) {
