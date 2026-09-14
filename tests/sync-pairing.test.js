@@ -38,12 +38,15 @@ test("legal-entity dressing is stripped from merchant names", () => {
   assert.equal(canonicalMerchant("Zomato Limited"), "Zomato");
   assert.equal(canonicalMerchant("Amazon Pay India Private Limited"), "Amazon Pay India");
   assert.equal(canonicalMerchant("GMR Airports Ltd."), "GMR Airports");
-  assert.equal(canonicalMerchant("RAMEN-ISM B.V."), "Ramen-Ism");
+  assert.equal(canonicalMerchant("RAMEN-ISM B.V."), "RAMEN-ISM");
   assert.equal(canonicalMerchant("Prague Dream Hostel s.r.o"), "Prague Dream Hostel");
   assert.equal(canonicalMerchant("Blink Commerce Pvt Ltd"), "Blink Commerce");
   assert.equal(canonicalMerchant("Wispr AI, Inc."), "Wispr AI");
   assert.equal(canonicalMerchant("Swiggy"), "Swiggy");
   assert.equal(canonicalMerchant("OpenAI"), "OpenAI");
   assert.equal(canonicalMerchant("KFC"), "KFC");
+  assert.equal(canonicalMerchant("IRCTC"), "IRCTC");
+  assert.equal(canonicalMerchant("PVR INOX"), "PVR INOX");
+  assert.equal(canonicalMerchant("Tiffany & Co"), "Tiffany & Co");
   assert.equal(canonicalMerchant(""), "Unknown");
 });
