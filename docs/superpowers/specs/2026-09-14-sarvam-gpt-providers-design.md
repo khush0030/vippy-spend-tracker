@@ -63,8 +63,8 @@ digitise(buffer, mime, { timeoutMs })                                     // -> 
 Uses the `sarvamai` npm client (`client.docAi.extract` / `digitise`, `getStatus`,
 `getDownloadUrl`). Polls every 3 s; terminal statuses are `completed`, `partially_completed`,
 `failed`, `rejected`. Anything but `completed` throws — a partially read receipt is not a
-second opinion. The ZIP is opened with the `zip.js` machinery already in the repo, or `jszip`
-if that proves write-only; the JSON file inside is the result. Limits enforced before upload:
+second opinion. `lib/zip.js` only writes archives, so the download is opened with `jszip`
+(new dependency); the JSON file inside is the result. Limits enforced before upload:
 10 pages, 200 MB; a statement chunk from `pdf-pages.js` is already ≤ 10 pages.
 
 `api-subscription-key` header authentication; `SARVAM_API_KEY` env var.
