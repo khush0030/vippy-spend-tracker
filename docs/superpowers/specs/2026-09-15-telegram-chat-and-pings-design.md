@@ -25,8 +25,10 @@ day-of-month logic; the jobs that should run once a day (`rematch`, `nudge`, `ma
 ### `ping` job
 
 `lib/ping.js`. After `sync` inserts rows, `ping` selects `transactions` for the user where
-`receipt_status = 'missing'`, `is_refund = false`, `amount >= card.min_receipt_amount`,
-inserted in the last 26 hours, and with no row in `receipt_pings`. For each (newest first,
+`receipt_status = 'missing'`, `is_refund = false`, inserted in the last 26 hours, and with
+no row in `receipt_pings`. **No amount threshold**: a ₹50 subscription needs its invoice as
+much as a ₹5,000 hotel. `card_accounts.min_receipt_amount` is set to 0 for the existing card
+and the default changed to 0, so `outstanding()` and coverage agree. For each (newest first,
 max 5 per tick to keep the chat readable) it sends:
 
 ```
@@ -39,13 +41,16 @@ and records `receipt_pings (transaction_id pk, user_id, sent_at, tg_message_id, 
 answer)`. Buttons (callback_data ≤ 64 bytes, existing `action:id` style):
 
 - `nb:<txn>` → `receipt_status = 'declared'`, edit message to "Noted — no bill for ₹1,372 Swiggy."
-- `sub:<txn>` → `receipt_status = 'waived'` and insert the merchant into `waived_merchants
-  (user_id, merchant)`; future pings skip that merchant. Message edited to say so.
+- `sub:<txn>` → insert the merchant into `recurring_merchants (user_id, merchant)`. Nothing
+  is waived: the charge stays `missing`. The message is edited to "Noted as recurring —
+  Netflix invoices usually arrive by email; the harvester checks the 17th–23rd. Forward it
+  here if it doesn't turn up." Later pings for a recurring merchant use that shorter wording
+  and drop the Subscription button.
 - `later:<txn>` → `answer = 'later'`; the morning `dailyNudge` already re-lists it, so
   nothing else changes.
 
-A merchant on `waived_merchants` is never pinged. A charge already `attached` at ping time
-(the harvester or a photo beat the ping) is not pinged.
+A charge already `attached` at ping time (the harvester or a photo beat the ping) is not
+pinged.
 
 `dailyNudge` is unchanged except that it excludes charges pinged today and unanswered —
 they were asked once already; the digest is for what is still open from before.
@@ -117,7 +122,7 @@ Read:
 
 Write (confirm first):
 - `declare_no_bill(transaction_id)` → `receipt_status='declared'`
-- `waive_merchant(merchant)` → `waived_merchants` + `receipt_status='waived'` on open charges
+- `mark_recurring(merchant)` → `recurring_merchants`
 - `rename_merchant(from, to)` → the existing `/api/transactions/rename` logic, called as a
   function (extract `renameMerchant` into `lib/merchant-alias.js`)
 - `set_category(transaction_id, category)`
@@ -141,7 +146,7 @@ create table receipt_pings (
   user_id text not null, sent_at timestamptz not null default now(),
   tg_message_id bigint, answered_at timestamptz, answer text
     check (answer in ('no_bill','subscription','later')));
-create table waived_merchants (
+create table recurring_merchants (
   user_id text not null, merchant text not null, created_at timestamptz default now(),
   primary key (user_id, merchant));
 create table tg_conversations (
@@ -151,6 +156,8 @@ create table tg_conversations (
   created_at timestamptz not null default now());
 create index on tg_conversations (chat_id, created_at desc);
 alter table card_accounts add column pings_paused_until date;
+alter table card_accounts alter column min_receipt_amount set default 0;
+update card_accounts set min_receipt_amount = 0;
 ```
 Deny-all RLS for anon on the three tables, matching the existing migrations.
 
@@ -158,8 +165,8 @@ Deny-all RLS for anon on the three tables, matching the existing migrations.
 
 - `tests/chat-periods.test.js` — every period form, month boundaries, cycle relative.
 - `tests/chat-tools-args.test.js` — arg validation.
-- `tests/ping-plan.test.js` — pure selection: threshold, waived merchant, already pinged,
-  paused, refund, max 5.
+- `tests/ping-plan.test.js` — pure selection: no threshold (₹50 pinged), recurring wording,
+  already pinged, paused, refund, attached, max 5.
 - `tests/llm.test.js` — `chatWithTools` request shape and tool-result round trip via fake
   fetch.
 - `scripts/replay-chat.js` — 20 canned questions through Sarvam and GPT, answers printed
