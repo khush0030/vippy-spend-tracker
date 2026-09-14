@@ -38,7 +38,9 @@ chatJson({ provider, model, system, user, maxTokens, temperature })
 - `provider: "sarvam"` → `new OpenAI({ apiKey: SARVAM_API_KEY, baseURL: "https://api.sarvam.ai/v1" })`.
   Sarvam accepts `Authorization: Bearer` for OpenAI-compatible tooling. Default `max_tokens`
   there is 2048, so it is always passed explicitly; reasoning tokens count against it.
-- `provider: "openai"` → the stock client. Uses `chat.completions` too; the Responses API stays
+- `provider: "openai"` → the same SDK with the default base URL. (`openai` becomes a dependency;
+  the existing vision code calls the Responses API with raw `fetch` and keeps doing so.) Uses
+  `chat.completions` too; the Responses API stays
   only in the vision paths, which need `input_file` / `input_image`.
 - Model strings carry their provider as a prefix, `sarvam:sarvam-105b`, `openai:gpt-5.6`, so a
   single env var names both. `parseModelRef("sarvam:sarvam-105b")` → `{ provider, model }`. A
