@@ -61,6 +61,8 @@ test("extractFields submits the schema, polls to completion and returns the pars
   assert.equal(create.init.body.get("language"), "en-IN");
   assert.equal(create.init.body.get("file").type, "application/pdf");
   assert.equal(sarvam.calls.filter((c) => c.url.endsWith("/status")).length, 3);
+  const download = sarvam.calls.find((c) => c.url === "https://files.example/out.zip");
+  assert.equal(download.init.method, "GET");
 });
 
 test("digitise asks for markdown and returns the markdown file", async () => {
