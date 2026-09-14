@@ -1,17 +1,17 @@
 import "./globals.css";
-import { Plus_Jakarta_Sans, DM_Sans } from "next/font/google";
+import { Manrope, IBM_Plex_Mono } from "next/font/google";
 import Providers from "./providers";
 
-const jakarta = Plus_Jakarta_Sans({
+const manrope = Manrope({
   subsets: ["latin"],
-  variable: "--font-jakarta",
+  variable: "--font-manrope",
   weight: ["400", "500", "600", "700", "800"],
 });
 
-const dmSans = DM_Sans({
+const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
-  variable: "--font-dm",
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-mono",
+  weight: ["400", "500", "600"],
 });
 
 export const metadata = {
@@ -32,11 +32,16 @@ export const metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F4F6F7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0D1214" },
+  ],
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${dmSans.variable}`}>
+    <html lang="en" className={`${manrope.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <body>
         <a href="#main-content" className="skip-link">
           Skip to main content

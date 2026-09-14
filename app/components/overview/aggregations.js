@@ -1,13 +1,13 @@
 export const CATEGORY_COLORS = {
-  amazon: "#7C3AED",
-  fuel: "#10B981",
-  dining: "#F59E0B",
-  swiggy: "#FC8019",
-  utilities: "#EF4444",
-  subscriptions: "#0EA5E9",
-  office: "#94A3B8",
-  travel: "#06B6D4",
-  other: "#64748B",
+  amazon: "#C27C0E",
+  fuel: "#3B8F5A",
+  dining: "#C8553D",
+  swiggy: "#E07B39",
+  utilities: "#6B6FB5",
+  subscriptions: "#2F6FAE",
+  office: "#7A8A94",
+  travel: "#1F9AA8",
+  other: "#8C979D",
 };
 
 export const CATEGORY_LABELS = {

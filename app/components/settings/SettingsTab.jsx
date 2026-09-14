@@ -3,87 +3,68 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import { fmtINR } from "../overview/aggregations";
+import Icon from "../ui/Icon";
+import { Banner, Button, Card, Chip, Empty, Field, Notice, Segmented } from "../ui/kit";
 
-const numStyle = {
-  fontFamily: "var(--font-display)",
-  fontVariantNumeric: "tabular-nums",
-  letterSpacing: "-0.02em",
-};
+const SECTIONS = [
+  { id: "profile", label: "Profile", icon: "user" },
+  { id: "card", label: "Corporate card", icon: "card" },
+  { id: "gmail", label: "Gmail sync", icon: "mail" },
+  { id: "mailboxes", label: "Invoice mailboxes", icon: "mail" },
+  { id: "bot", label: "Receipt bot", icon: "bot" },
+  { id: "password", label: "Password", icon: "lock" },
+  { id: "activity", label: "Activity log", icon: "activity" },
+];
 
-const sectionLabelStyle = {
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.12em",
-  textTransform: "uppercase",
-  color: "var(--text-muted)",
-  marginBottom: 14,
-  fontFamily: "var(--font-display)",
-};
-
-const cardStyle = {
-  background: "var(--bg-card)",
-  border: "1px solid var(--border)",
-  borderRadius: 12,
-  padding: 26,
-};
-
-const fieldLabel = {
-  fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "var(--text-muted)",
-  marginBottom: 6,
-  fontFamily: "var(--font-display)",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px 14px",
-  borderRadius: 10,
-  border: "1px solid var(--border)",
-  background: "var(--bg-card-2)",
-  color: "var(--text)",
-  fontSize: 14,
-  fontFamily: "var(--font-body)",
-  transition: "border-color 0.15s, box-shadow 0.15s",
-};
-
-const onFocus = (e) => {
-  e.target.style.borderColor = "var(--brand)";
-  e.target.style.boxShadow = "0 0 0 3px var(--brand-subtle)";
-};
-const onBlur = (e) => {
-  e.target.style.borderColor = "var(--border)";
-  e.target.style.boxShadow = "none";
-};
-
-export default function SettingsTab({ session }) {
+export default function SettingsTab({ session, isMobile }) {
   return (
-    <div style={{ maxWidth: 760, display: "flex", flexDirection: "column", gap: 36 }}>
-      <ProfileCard session={session} />
-      <PasswordCard />
-      <ConnectionCard />
-      <CorporateCardCard />
-      <MailboxesCard />
-      <ReceiptBotCard />
-      <ActivityCard />
-      <AccountCard />
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "190px minmax(0, 760px)", gap: 24, alignItems: "start" }}>
+      {!isMobile && (
+        <nav aria-label="Settings sections" style={{ position: "sticky", top: 24, display: "flex", flexDirection: "column", gap: 2 }}>
+          {SECTIONS.map((s) => (
+            <a key={s.id} href={`#settings-${s.id}`} className="nav-item" style={{ fontSize: 13 }}>
+              <Icon name={s.icon} size={16} />
+              {s.label}
+            </a>
+          ))}
+        </nav>
+      )}
+      <div className="stack">
+        <ProfileCard session={session} />
+        <CorporateCardCard />
+        <ConnectionCard />
+        <MailboxesCard />
+        <ReceiptBotCard />
+        <PasswordCard />
+        <ActivityCard />
+      </div>
     </div>
   );
 }
 
+function Section({ id, title, hint, action, children, flush }) {
+  return (
+    <div id={`settings-${id}`} style={{ scrollMarginTop: 80 }}>
+      <Card title={title} hint={hint} action={action} flush={flush} padLg={!flush}>
+        {children}
+      </Card>
+    </div>
+  );
+}
+
+const Lead = ({ children }) => <p className="small muted" style={{ lineHeight: 1.55, marginBottom: 16, maxWidth: "64ch" }}>{children}</p>;
+
 function ProfileCard({ session }) {
   const [avatarUrl, setAvatarUrl] = useState(session?.user?.image || null);
   const [uploading, setUploading] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState("");
+  const [msg, setMsg] = useState({ text: "", type: "" });
   const fileInputRef = useRef(null);
 
   const upload = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    setUploadMsg("");
+    setMsg({ text: "", type: "" });
     try {
       const fd = new FormData();
       fd.append("avatar", file);
@@ -91,87 +72,38 @@ function ProfileCard({ session }) {
       const data = await res.json();
       if (data.avatar_url) {
         setAvatarUrl(data.avatar_url);
-        setUploadMsg("Avatar updated");
+        setMsg({ text: "Photo updated", type: "success" });
       } else {
-        setUploadMsg(data.error || "Upload failed");
+        setMsg({ text: data.error || "Upload failed — use a JPG, PNG or WebP image", type: "error" });
       }
     } catch {
-      setUploadMsg("Upload failed");
+      setMsg({ text: "Upload failed — check your connection", type: "error" });
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      setTimeout(() => setUploadMsg(""), 3000);
     }
   }, []);
 
   const user = session?.user;
 
   return (
-    <section>
-      <h2 style={sectionLabelStyle}>Profile</h2>
-      <div style={cardStyle}>
-        <div style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt=""
-                style={{ width: 80, height: 80, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--border)" }}
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: "50%",
-                  background: "var(--brand)",
-                  color: "#fff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 32,
-                  fontWeight: 700,
-                  fontFamily: "var(--font-display)",
-                }}
-              >
-                {user?.name?.[0]?.toUpperCase() || "?"}
-              </div>
-            )}
-          </div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.02em" }}>
-              {user?.name || "User"}
-            </div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>{user?.email}</div>
-            {uploadMsg && (
-              <div style={{ fontSize: 12, marginTop: 8, color: uploadMsg.includes("fail") ? "var(--danger)" : "var(--success)", fontWeight: 600 }}>
-                {uploadMsg}
-              </div>
-            )}
-          </div>
-          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={upload} />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            style={{
-              padding: "10px 18px",
-              borderRadius: 10,
-              border: "1px solid var(--border)",
-              background: "var(--bg-card-2)",
-              color: "var(--text)",
-              fontSize: 13,
-              fontWeight: 600,
-              fontFamily: "var(--font-display)",
-              opacity: uploading ? 0.6 : 1,
-              cursor: uploading ? "default" : "pointer",
-            }}
-          >
-            {uploading ? "Uploading…" : "Change avatar"}
-          </button>
+    <Section id="profile" title="Profile">
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <span className="avatar" style={{ width: 64, height: 64, fontSize: 24 }}>
+          {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" /> : user?.name?.[0]?.toUpperCase() || "?"}
+        </span>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>{user?.name || "You"}</div>
+          <div className="small muted">{user?.email}</div>
+        </div>
+        <input ref={fileInputRef} id="avatar-file" type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={upload} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button icon="upload" onClick={() => fileInputRef.current?.click()} disabled={uploading}>{uploading ? "Uploading…" : "Change photo"}</Button>
+          <Button variant="danger" icon="logout" onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</Button>
         </div>
       </div>
-    </section>
+      <div style={{ marginTop: 10 }}><Notice msg={msg} /></div>
+    </Section>
   );
 }
 
@@ -185,8 +117,8 @@ function PasswordCard() {
   const submit = async (e) => {
     e.preventDefault();
     setMsg({ text: "", type: "" });
-    if (pw.length < 8) return setMsg({ text: "Password must be at least 8 characters", type: "error" });
-    if (pw !== confirm) return setMsg({ text: "Passwords do not match", type: "error" });
+    if (pw.length < 8) return setMsg({ text: "New password must be at least 8 characters", type: "error" });
+    if (pw !== confirm) return setMsg({ text: "The two new passwords don't match", type: "error" });
     setSaving(true);
     try {
       const res = await fetch("/api/auth/change-password", {
@@ -196,65 +128,37 @@ function PasswordCard() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMsg({ text: "Password changed successfully", type: "success" });
+        setMsg({ text: "Password changed", type: "success" });
         setCurrent("");
         setPw("");
         setConfirm("");
       } else {
-        setMsg({ text: data.error || "Failed to change password", type: "error" });
+        setMsg({ text: data.error || "Could not change the password", type: "error" });
       }
     } catch {
-      setMsg({ text: "Failed to change password", type: "error" });
+      setMsg({ text: "Could not change the password — check your connection", type: "error" });
     }
     setSaving(false);
   };
 
   return (
-    <section>
-      <h2 style={sectionLabelStyle}>Password</h2>
-      <div style={cardStyle}>
-        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div>
-            <div style={fieldLabel}>Current password</div>
-            <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required style={inputStyle} autoComplete="current-password" onFocus={onFocus} onBlur={onBlur} />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div>
-              <div style={fieldLabel}>New password</div>
-              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} placeholder="Min 8 characters" style={inputStyle} autoComplete="new-password" onFocus={onFocus} onBlur={onBlur} />
-            </div>
-            <div>
-              <div style={fieldLabel}>Confirm new</div>
-              <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} style={inputStyle} autoComplete="new-password" onFocus={onFocus} onBlur={onBlur} />
-            </div>
-          </div>
-          {msg.text && (
-            <div style={{ fontSize: 12, fontWeight: 600, color: msg.type === "error" ? "var(--danger)" : "var(--success)" }}>
-              {msg.text}
-            </div>
-          )}
-          <button
-            type="submit"
-            disabled={saving}
-            style={{
-              padding: "12px 22px",
-              borderRadius: 10,
-              border: "none",
-              background: saving ? "var(--bg-card-2)" : "var(--brand)",
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 700,
-              alignSelf: "flex-start",
-              fontFamily: "var(--font-display)",
-              letterSpacing: "0.02em",
-              cursor: saving ? "default" : "pointer",
-            }}
-          >
-            {saving ? "Saving…" : "Update password"}
-          </button>
-        </form>
-      </div>
-    </section>
+    <Section id="password" title="Password" hint="for email sign-in">
+      <form onSubmit={submit} className="stack" style={{ gap: 14 }}>
+        <Field label="Current password" htmlFor="pw-current">
+          <input id="pw-current" className="input" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required autoComplete="current-password" />
+        </Field>
+        <div className="form-grid">
+          <Field label="New password" htmlFor="pw-new">
+            <input id="pw-new" className="input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} placeholder="At least 8 characters" autoComplete="new-password" />
+          </Field>
+          <Field label="Confirm new password" htmlFor="pw-confirm">
+            <input id="pw-confirm" className="input" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} autoComplete="new-password" />
+          </Field>
+        </div>
+        <Notice msg={msg} />
+        <div><button type="submit" className="btn primary" disabled={saving}>{saving ? "Saving…" : "Update password"}</button></div>
+      </form>
+    </Section>
   );
 }
 
@@ -271,13 +175,13 @@ function ConnectionCard() {
       const r = await fetch("/api/sync/debug");
       setDiag(await r.json());
     } catch (e) {
-      setMsg("Diagnostic failed: " + e.message);
+      setMsg("Diagnostics failed: " + e.message);
     }
     setLoading(false);
   };
 
   const forceResync = async () => {
-    if (!confirm("Clear last_synced_at? Next sync will re-scan every email from scratch.")) return;
+    if (!confirm("Re-scan every email from scratch on the next sync? This can take several minutes.")) return;
     setResetting(true);
     setMsg("");
     try {
@@ -292,113 +196,53 @@ function ConnectionCard() {
   };
 
   return (
-    <section>
-      <h2 style={sectionLabelStyle}>Gmail Connection</h2>
-      <div style={cardStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
-          <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-            Diagnose sync state — last sync time, Gmail query results, and latest transactions in the database.
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={runDiag}
-              disabled={loading}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 10,
-                border: "1px solid var(--border)",
-                background: "var(--bg-card-2)",
-                color: "var(--text)",
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: "var(--font-display)",
-                letterSpacing: "0.02em",
-                cursor: loading ? "default" : "pointer",
-              }}
-            >
-              {loading ? "Checking…" : "Run diagnostics"}
-            </button>
-            <button
-              onClick={forceResync}
-              disabled={resetting}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 10,
-                border: "1px solid var(--warning)",
-                background: "transparent",
-                color: "var(--warning)",
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: "var(--font-display)",
-                letterSpacing: "0.02em",
-                cursor: resetting ? "default" : "pointer",
-              }}
-            >
-              {resetting ? "Resetting…" : "Force full resync"}
-            </button>
-          </div>
-        </div>
+    <Section id="gmail" title="Gmail sync" action={
+      <span style={{ display: "flex", gap: 8 }}>
+        <Button size="sm" icon="activity" onClick={runDiag} disabled={loading}>{loading ? "Checking…" : "Run diagnostics"}</Button>
+        <Button size="sm" variant="danger" icon="sync" onClick={forceResync} disabled={resetting}>{resetting ? "Resetting…" : "Full resync"}</Button>
+      </span>
+    }>
+      <Lead>Charges come from HDFC alert emails in your Gmail. Diagnostics show when it last synced, what each search found, and the newest charges saved.</Lead>
 
-        {msg && (
-          <div style={{ padding: 12, background: "var(--bg-card-2)", borderRadius: 10, fontSize: 12, color: "var(--text-secondary)", marginBottom: 14 }}>
-            {msg}
-          </div>
-        )}
+      {msg && <div className="small" style={{ padding: 10, background: "var(--bg-card-2)", borderRadius: 8, marginBottom: 12 }}>{msg}</div>}
 
-        {diag && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {diag.error && (
-              <div style={{ padding: 12, background: "var(--danger-bg)", color: "var(--danger)", borderRadius: 10, fontSize: 12 }}>
-                {diag.error}
-              </div>
-            )}
-            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "10px 18px", fontSize: 13 }}>
-              <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Email</span>
-              <span style={{ color: "var(--text)" }}>{diag.userEmail || "—"}</span>
-              <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Last synced</span>
-              <span style={{ ...numStyle, color: "var(--text)" }}>{diag.lastSyncedAt || "never"}</span>
-              <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Date filter</span>
-              <span style={{ color: "var(--text)", fontFamily: "monospace", fontSize: 12 }}>{diag.dateFilter}</span>
+      {diag && (
+        <div className="stack" style={{ gap: 14 }}>
+          {diag.error && <Banner tone="bad" title={diag.error} />}
+          <dl className="kv-list">
+            <div><dt>Account</dt><dd>{diag.userEmail || "—"}</dd></div>
+            <div><dt>Last synced</dt><dd className="num">{diag.lastSyncedAt ? new Date(diag.lastSyncedAt).toLocaleString("en-IN") : "never"}</dd></div>
+            <div><dt>Date filter</dt><dd className="num small">{diag.dateFilter}</dd></div>
+          </dl>
+
+          {diag.gmailQueries && (
+            <div className="card flush">
+              {diag.gmailQueries.map((q) => (
+                <div key={q.name} className="list-row" style={{ alignItems: "flex-start" }}>
+                  <span className="grow">
+                    <div className="title">{q.name}</div>
+                    <div className="meta num" style={{ whiteSpace: "normal", wordBreak: "break-all" }}>{q.query || q.error}</div>
+                  </span>
+                  <Chip tone={q.error ? "bad" : q.count > 0 ? "ok" : null}>{q.error ? "Error" : `${q.count} emails`}</Chip>
+                </div>
+              ))}
             </div>
+          )}
 
-            {diag.gmailQueries && (
-              <div>
-                <div style={{ ...sectionLabelStyle, marginBottom: 10, fontSize: 10 }}>Gmail Queries</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {diag.gmailQueries.map((q) => (
-                    <div key={q.name} style={{ padding: "10px 14px", background: "var(--bg-card-2)", borderRadius: 8, fontSize: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontWeight: 700, color: "var(--text)" }}>{q.name}</span>
-                        <span style={{ color: q.error ? "var(--danger)" : q.count > 0 ? "var(--success)" : "var(--text-muted)", fontWeight: 700, ...numStyle }}>
-                          {q.error ? "ERROR" : `${q.count} emails`}
-                        </span>
-                      </div>
-                      <div style={{ color: "var(--text-muted)", fontFamily: "monospace", marginTop: 4, fontSize: 11, wordBreak: "break-all" }}>{q.query || q.error}</div>
-                    </div>
-                  ))}
+          {diag.recentTxns?.length > 0 && (
+            <div className="card flush">
+              {diag.recentTxns.map((t) => (
+                <div key={t.email_id} className="list-row">
+                  <span className="num small muted" style={{ width: 84 }}>{t.date}</span>
+                  <span className="grow title">{t.merchant}</span>
+                  <span className="amt">{fmtINR(t.amount)}</span>
                 </div>
-              </div>
-            )}
-
-            {diag.recentTxns && diag.recentTxns.length > 0 && (
-              <div>
-                <div style={{ ...sectionLabelStyle, marginBottom: 10, fontSize: 10 }}>Latest 5 transactions</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {diag.recentTxns.map((t) => (
-                    <div key={t.email_id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "8px 12px", background: "var(--bg-card-2)", borderRadius: 6 }}>
-                      <span style={{ color: "var(--text)" }}>
-                        {t.date} · {t.merchant}
-                      </span>
-                      <span style={{ ...numStyle, fontWeight: 700, color: "var(--text)" }}>{fmtINR(t.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -435,7 +279,6 @@ function CorporateCardCard() {
         setMsg({ text: "The stored statement password predates encryption. Re-enter it to encrypt it at rest.", type: "error" });
       }
     } catch (err) {
-      // Without this the card sat on "Loading…" forever with nothing to act on.
       setState((s) => ({ ...s, loading: false, error: err.message }));
     }
   }, []);
@@ -463,11 +306,11 @@ function CorporateCardCard() {
       const data = await r.json();
 
       if (r.ok) {
-        setMsg({ text: "Saved", type: "success" });
+        setMsg({ text: "Card saved", type: "success" });
         setPassword("");
         setHasPassword(Boolean(data.card?.hasStatementPassword));
       } else {
-        setMsg({ text: data.error || "Could not save", type: "error" });
+        setMsg({ text: data.error || "Could not save the card", type: "error" });
       }
     } catch (err) {
       setMsg({ text: err.message, type: "error" });
@@ -476,145 +319,102 @@ function CorporateCardCard() {
   };
 
   return (
-    <section>
-      <h2 style={sectionLabelStyle}>Corporate Card</h2>
-      <div style={cardStyle}>
-        {state.error ? (
-          <div>
-            <div style={{ fontSize: 13, color: "var(--danger)", fontWeight: 600, marginBottom: 6 }}>
-              Could not load the card configuration
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>{state.error}</div>
-            <button
-              onClick={load}
-              style={{
-                padding: "9px 16px",
-                borderRadius: 10,
-                border: "1px solid var(--border)",
-                background: "var(--bg-card-2)",
-                color: "var(--text)",
-                fontSize: 12,
-                fontWeight: 700,
-                fontFamily: "var(--font-display)",
-                cursor: "pointer",
-              }}
-            >
-              Try again
-            </button>
+    <Section id="card" title="Corporate card" hint="drives the receipt cycle">
+      {state.error ? (
+        <Empty icon="alert" title="Could not load the card" action={<Button icon="sync" onClick={load}>Try again</Button>}>{state.error}</Empty>
+      ) : state.loading || !form ? (
+        <div className="skeleton" style={{ height: 260 }} />
+      ) : (
+        <form onSubmit={submit} className="stack" style={{ gap: 16 }}>
+          <CardPreview form={form} />
+
+          <div className="form-grid" style={{ gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)" }}>
+            <Field label="Company" htmlFor="card-entity">
+              <input id="card-entity" className="input" value={form.entity_name} onChange={set("entity_name")} />
+            </Field>
+            <Field label="Last 4 digits" htmlFor="card-last4">
+              <input id="card-last4" className="input num" inputMode="numeric" maxLength={4} value={form.last4} onChange={set("last4")} placeholder="7634" />
+            </Field>
           </div>
-        ) : state.loading || !form ? (
-          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading…</div>
-        ) : (
-          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-              The statement arrives on the statement day and the package goes to accounts on the
-              submit day. Everything between the two is the window for chasing missing receipts.
-            </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14 }}>
-              <div>
-                <div style={fieldLabel}>Entity</div>
-                <input value={form.entity_name} onChange={set("entity_name")} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
-              </div>
-              <div>
-                <div style={fieldLabel}>Card last 4</div>
-                <input value={form.last4} onChange={set("last4")} placeholder="4417" style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
-              </div>
-            </div>
+          <div className="form-grid">
+            <Field label="Statement day" htmlFor="card-stmt" help="Day of month HDFC issues it">
+              <input id="card-stmt" className="input num" type="number" min={1} max={31} value={form.statement_day} onChange={set("statement_day")} />
+            </Field>
+            <Field label="Submit day" htmlFor="card-submit" help="Day the package goes to accounts">
+              <input id="card-submit" className="input num" type="number" min={1} max={31} value={form.submit_day} onChange={set("submit_day")} />
+            </Field>
+            <Field label="Receipt needed above" htmlFor="card-min" help={`Charges under ${fmtINR(Number(form.min_receipt_amount) || 0)} are never chased`}>
+              <input id="card-min" className="input num" type="number" min={0} step="50" value={form.min_receipt_amount} onChange={set("min_receipt_amount")} />
+            </Field>
+          </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-              <div>
-                <div style={fieldLabel}>Statement day</div>
-                <input type="number" min={1} max={31} value={form.statement_day} onChange={set("statement_day")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
-              </div>
-              <div>
-                <div style={fieldLabel}>Submit day</div>
-                <input type="number" min={1} max={31} value={form.submit_day} onChange={set("submit_day")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
-              </div>
-              <div>
-                <div style={fieldLabel}>Receipt threshold</div>
-                <input type="number" min={0} step="50" value={form.min_receipt_amount} onChange={set("min_receipt_amount")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
-              </div>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: -8 }}>
-              Charges under {fmtINR(Number(form.min_receipt_amount) || 0)} are waived automatically and never chased.
-            </div>
+          <div className="form-grid">
+            <Field label="Accounts email" htmlFor="card-accounts" help="Comma separated">
+              <input id="card-accounts" className="input" type="text" value={form.accounts_email} onChange={set("accounts_email")} placeholder="accounts@vipindustries.com" />
+            </Field>
+            <Field label="CC (optional)" htmlFor="card-cc">
+              <input id="card-cc" className="input" type="text" value={form.cc_email} onChange={set("cc_email")} placeholder="finance@vipindustries.com" />
+            </Field>
+          </div>
 
-            <div>
-              <div style={fieldLabel}>Accounts email</div>
-              <input value={form.accounts_email} onChange={set("accounts_email")} placeholder="accounts@vipindustries.com" style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+          <Field
+            label="Statement PDF password"
+            htmlFor="card-pdfpw"
+            help={state.encryptionReady ? "Encrypted at rest and only used to open the statement. Never logged or shown again." : "STATEMENT_PW_KEY isn't set on the server, so the password can't be stored yet."}
+          >
+            <input id="card-pdfpw" className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={hasPassword ? "Saved — type to replace" : "HDFC e-statement password"} autoComplete="off" />
+          </Field>
+
+          <details>
+            <summary className="small" style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-secondary)" }}>Foreign charges</summary>
+            <div className="form-grid" style={{ marginTop: 12 }}>
+              <Field label="Forex markup %" htmlFor="card-fx">
+                <input id="card-fx" className="input num" type="number" step="0.1" value={form.forex_markup_pct} onChange={set("forex_markup_pct")} />
+              </Field>
+              <Field label="GST on markup %" htmlFor="card-fxgst">
+                <input id="card-fxgst" className="input num" type="number" step="0.1" value={form.forex_gst_pct} onChange={set("forex_gst_pct")} />
+              </Field>
             </div>
-            <div>
-              <div style={fieldLabel}>CC</div>
-              <input value={form.cc_email} onChange={set("cc_email")} placeholder="optional, comma separated" style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
-            </div>
+            <p className="small muted" style={{ marginTop: 8, lineHeight: 1.5 }}>A foreign bill never equals its rupee charge, so it's matched within the band these two numbers predict.</p>
+          </details>
 
-            <div>
-              <div style={fieldLabel}>Statement PDF password</div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={hasPassword ? "•••••••• saved — type to replace" : "HDFC's e-statement password"}
-                style={inputStyle}
-                autoComplete="off"
-                onFocus={onFocus}
-                onBlur={onBlur}
-              />
-              <div style={{ fontSize: 12, color: state.encryptionReady ? "var(--text-muted)" : "var(--danger)", marginTop: 6, lineHeight: 1.5 }}>
-                {state.encryptionReady
-                  ? "Encrypted at rest and only ever replayed to the PDF reader. Never logged, never returned by the API."
-                  : "STATEMENT_PW_KEY is not set on the server, so the password cannot be stored. Set it and reload."}
-              </div>
-            </div>
+          <Notice msg={msg} />
+          <div><button type="submit" className="btn primary" disabled={state.saving}>{state.saving ? "Saving…" : "Save card"}</button></div>
+        </form>
+      )}
+    </Section>
+  );
+}
 
-            <details>
-              <summary style={{ ...fieldLabel, cursor: "pointer", marginBottom: 0 }}>Foreign charge constants</summary>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
-                <div>
-                  <div style={fieldLabel}>Forex markup %</div>
-                  <input type="number" step="0.1" value={form.forex_markup_pct} onChange={set("forex_markup_pct")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
-                </div>
-                <div>
-                  <div style={fieldLabel}>GST on markup %</div>
-                  <input type="number" step="0.1" value={form.forex_gst_pct} onChange={set("forex_gst_pct")} style={{ ...inputStyle, ...numStyle }} onFocus={onFocus} onBlur={onBlur} />
-                </div>
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.5 }}>
-                Used to model what a euro bill should post at in rupees. A foreign receipt can never
-                match on amount equality, so it is matched against this band instead.
-              </div>
-            </details>
-
-            {msg.text && (
-              <div style={{ fontSize: 12, fontWeight: 600, color: msg.type === "error" ? "var(--danger)" : "var(--success)", lineHeight: 1.5 }}>
-                {msg.text}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={state.saving}
-              style={{
-                padding: "12px 22px",
-                borderRadius: 10,
-                border: "none",
-                background: state.saving ? "var(--bg-card-2)" : "var(--brand)",
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 700,
-                alignSelf: "flex-start",
-                fontFamily: "var(--font-display)",
-                letterSpacing: "0.02em",
-                cursor: state.saving ? "default" : "pointer",
-              }}
-            >
-              {state.saving ? "Saving…" : "Save card"}
-            </button>
-          </form>
-        )}
+/** A small rendering of the physical card so the cycle settings read as belonging to it. */
+function CardPreview({ form }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        maxWidth: 320,
+        aspectRatio: "1.586 / 1",
+        borderRadius: 14,
+        padding: 16,
+        color: "#EAF4F2",
+        background: "linear-gradient(135deg, #0E3B35 0%, #0E6B5E 60%, #1F9AA8 100%)",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        boxShadow: "var(--shadow-hover)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, letterSpacing: "0.04em" }}>
+        <span>{form.label || "HDFC Corporate"}</span>
+        <span style={{ width: 30, height: 22, borderRadius: 4, background: "linear-gradient(135deg,#E9D8A6,#C9A94F)" }} />
       </div>
-    </section>
+      <div className="num" style={{ fontSize: 17, letterSpacing: "0.12em" }}>•••• •••• •••• {form.last4 || "····"}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, opacity: 0.9 }}>
+        <span style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>{form.entity_name}</span>
+        <span className="num">Stmt {form.statement_day} · Submit {form.submit_day}</span>
+      </div>
+    </div>
   );
 }
 
@@ -625,20 +425,21 @@ function MailboxesCard() {
   const [data, setData] = useState({ accounts: [], encryptionReady: true, connectUrl: "" });
   const [form, setForm] = useState({ email: "", app_password: "" });
   const [busy, setBusy] = useState(false);
+  const [showAppPw, setShowAppPw] = useState(false);
   const [msg, setMsg] = useState({ text: "", type: "" });
 
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/mail-accounts");
       if (r.ok) setData(await r.json());
-    } catch (err) {
+    } catch {
       setMsg({ text: "Could not load mailboxes", type: "error" });
     }
   }, []);
 
   useEffect(() => {
     load();
-    // Requirement 7: surface ?mailbox= from the OAuth redirect, then clear it.
+    // Surface ?mailbox= from the OAuth redirect, then clear it.
     const params = new URLSearchParams(window.location.search);
     const outcome = params.get("mailbox");
     if (outcome) {
@@ -668,10 +469,11 @@ function MailboxesCard() {
       const result = await r.json();
       if (r.ok) {
         setForm({ email: "", app_password: "" });
+        setShowAppPw(false);
         await load();
         setMsg({ text: "Mailbox added.", type: "success" });
       } else {
-        setMsg({ text: result.error || "Could not add mailbox", type: "error" });
+        setMsg({ text: result.error || "Could not add the mailbox", type: "error" });
       }
     } catch (err) {
       setMsg({ text: err.message, type: "error" });
@@ -680,16 +482,15 @@ function MailboxesCard() {
   };
 
   const remove = async (id) => {
-    if (!confirm("Remove this mailbox? The harvester will not read invoices from it again.")) return;
+    if (!confirm("Remove this mailbox? Invoices will no longer be read from it.")) return;
     setBusy(true);
     setMsg({ text: "", type: "" });
     try {
       const r = await fetch(`/api/mail-accounts?id=${id}`, { method: "DELETE" });
-      if (r.ok) {
-        await load();
-      } else {
+      if (r.ok) await load();
+      else {
         const result = await r.json();
-        setMsg({ text: result.error || "Could not remove mailbox", type: "error" });
+        setMsg({ text: result.error || "Could not remove the mailbox", type: "error" });
       }
     } catch (err) {
       setMsg({ text: err.message, type: "error" });
@@ -697,158 +498,55 @@ function MailboxesCard() {
     setBusy(false);
   };
 
-  const inputStyle = {
-    padding: "8px 12px",
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--bg-input)",
-    color: "var(--text)",
-    fontSize: 12,
-    fontFamily: "monospace",
-  };
-
-  const buttonStyle = {
-    padding: "10px 18px",
-    borderRadius: 10,
-    border: "1px solid var(--border)",
-    background: "var(--bg-card-2)",
-    color: "var(--text)",
-    fontSize: 12,
-    fontWeight: 700,
-    fontFamily: "var(--font-display)",
-    cursor: busy ? "default" : "pointer",
-  };
-
-  const badgeStyle = (role) => ({
-    display: "inline-block",
-    padding: "3px 8px",
-    borderRadius: 4,
-    fontSize: 11,
-    fontWeight: 700,
-    background: role === "primary" ? "var(--success-bg)" : "var(--bg-card-2)",
-    color: role === "primary" ? "var(--success)" : "var(--text)",
-  });
-
   return (
-    <section>
-      <h2 style={sectionLabelStyle}>Mailboxes</h2>
-      <div style={cardStyle}>
-        <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
-          Connected email accounts from which the harvester reads invoices.
-        </div>
+    <Section id="mailboxes" title="Invoice mailboxes">
+      <Lead>Inboxes where vendors send invoices. Vippy reads them and files each bill against its charge.</Lead>
 
-        {data.encryptionReady ? (
-          <>
-            {/* Requirement 2: List accounts */}
-            {data.accounts && data.accounts.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
-                {data.accounts.map((account) => (
-                  <div
-                    key={account.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "12px",
-                      marginBottom: 8,
-                      borderRadius: 6,
-                      background: account.status === "revoked" ? "var(--danger-bg)" : "var(--bg-card-2)",
-                      flexWrap: "wrap",
-                      gap: 12,
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 200 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: account.status === "revoked" ? "var(--danger)" : "var(--text)" }}>
-                        {account.email}
-                      </div>
-                      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4, display: "flex", gap: 8 }}>
-                        <span style={badgeStyle(account.role)}>
-                          {account.role === "primary" ? "Primary" : "Invoices"}
-                        </span>
-                        <span>{account.auth_kind === "oauth" ? "Google" : "App password"}</span>
-                        {account.status === "revoked" && (
-                          <span style={{ color: "var(--danger)", fontWeight: 700 }}>Reconnect this mailbox — the harvester cannot read it.</span>
-                        )}
-                      </div>
+      {!data.encryptionReady ? (
+        <Banner title="Mailboxes can't be connected yet">Set STATEMENT_PW_KEY on the server first.</Banner>
+      ) : (
+        <div className="stack" style={{ gap: 12 }}>
+          {data.accounts?.length > 0 && (
+            <div className="card flush">
+              {data.accounts.map((account) => (
+                <div key={account.id} className="list-row" style={{ flexWrap: "wrap" }}>
+                  <span className="merchant-avatar" style={{ background: account.status === "revoked" ? "var(--danger-bg)" : "var(--brand-subtle)", color: account.status === "revoked" ? "var(--danger)" : "var(--brand-strong-text)" }}>
+                    <Icon name="mail" size={15} />
+                  </span>
+                  <span className="grow">
+                    <div className="title">{account.email}</div>
+                    <div className="meta" style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 3 }}>
+                      <Chip tone={account.role === "primary" ? "ok" : null}>{account.role === "primary" ? "Primary" : "Invoices"}</Chip>
+                      {account.auth_kind === "oauth" ? "Google" : "App password"}
                     </div>
-                    <button
-                      onClick={() => remove(account.id)}
-                      disabled={busy}
-                      style={buttonStyle}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Requirement 3: Connect Google link */}
-            <div style={{ marginBottom: 16 }}>
-              <a
-                href={data.connectUrl}
-                style={{
-                  color: "var(--brand)",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  textDecoration: "none",
-                }}
-              >
-                Connect Google account
-              </a>
+                    {account.status === "revoked" && <div className="small" style={{ color: "var(--danger)", fontWeight: 600, marginTop: 4 }}>Access lost — reconnect this mailbox.</div>}
+                  </span>
+                  <Button size="sm" variant="ghost" icon="trash" onClick={() => remove(account.id)} disabled={busy}>Remove</Button>
+                </div>
+              ))}
             </div>
+          )}
 
-            {/* Requirement 4: App password form */}
-            <form onSubmit={addAppPassword} style={{ marginBottom: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4, color: "var(--text-secondary)" }}>
-                  Add app-password mailbox
-                </label>
-                <input
-                  type="email"
-                  placeholder="Email address"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
-                  disabled={busy}
-                />
-                <input
-                  type="password"
-                  placeholder="App password"
-                  value={form.app_password}
-                  onChange={(e) => setForm({ ...form, app_password: e.target.value })}
-                  style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
-                  disabled={busy}
-                />
-                <button
-                  type="submit"
-                  disabled={busy || !form.email || !form.app_password}
-                  style={{ ...buttonStyle, opacity: busy || !form.email || !form.app_password ? 0.5 : 1 }}
-                >
-                  {busy ? "Adding…" : "Add mailbox"}
-                </button>
-              </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <a className="btn primary" href={data.connectUrl}><Icon name="link" size={16} /> Connect Google account</a>
+            <Button onClick={() => setShowAppPw((v) => !v)} iconRight={showAppPw ? "chevronDown" : undefined}>Use an app password</Button>
+          </div>
+
+          {showAppPw && (
+            <form onSubmit={addAppPassword} className="form-grid" style={{ alignItems: "end" }}>
+              <Field label="Email address" htmlFor="mb-email">
+                <input id="mb-email" className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} disabled={busy} />
+              </Field>
+              <Field label="App password" htmlFor="mb-pw">
+                <input id="mb-pw" className="input" type="password" value={form.app_password} onChange={(e) => setForm({ ...form, app_password: e.target.value })} disabled={busy} />
+              </Field>
+              <div><button type="submit" className="btn" disabled={busy || !form.email || !form.app_password}>{busy ? "Adding…" : "Add mailbox"}</button></div>
             </form>
-          </>
-        ) : (
-          <div style={{ fontSize: 13, color: "var(--warning)", padding: 12, background: "var(--warning-bg)", borderRadius: 6 }}>
-            Set STATEMENT_PW_KEY before connecting a mailbox.
-          </div>
-        )}
-
-        {msg.text && (
-          <div
-            style={{
-              fontSize: 12,
-              color: msg.type === "error" ? "var(--danger)" : msg.type === "success" ? "var(--success)" : "var(--text)",
-              marginTop: 12,
-            }}
-          >
-            {msg.text}
-          </div>
-        )}
-      </div>
-    </section>
+          )}
+        </div>
+      )}
+      <div style={{ marginTop: 10 }}><Notice msg={msg} /></div>
+    </Section>
   );
 }
 
@@ -888,7 +586,7 @@ function ReceiptBotCard() {
   };
 
   const unlink = async () => {
-    if (!confirm("Unlink the chat? The bot will stop accepting receipts until you link again.")) return;
+    if (!confirm("Unlink the chat? The bot stops accepting receipts until you link again.")) return;
     setBusy(true);
     setMsg("");
     try {
@@ -900,60 +598,36 @@ function ReceiptBotCard() {
     setBusy(false);
   };
 
-  const buttonStyle = {
-    padding: "10px 18px",
-    borderRadius: 10,
-    border: "1px solid var(--border)",
-    background: "var(--bg-card-2)",
-    color: "var(--text)",
-    fontSize: 12,
-    fontWeight: 700,
-    fontFamily: "var(--font-display)",
-    cursor: busy ? "default" : "pointer",
-  };
-
   return (
-    <section>
-      <h2 style={sectionLabelStyle}>Receipt Bot</h2>
-      <div style={cardStyle}>
-        <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
-          Photograph a bill, send it to the bot, and it files itself against the right charge.
+    <Section id="bot" title="Receipt bot" action={link?.linked ? <Chip tone="ok">Linked</Chip> : link ? <Chip>Not linked</Chip> : null}>
+      <Lead>Photograph a bill, send it to the Telegram bot, and it files itself against the right charge.</Lead>
+
+      {link?.linked ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span className="merchant-avatar" style={{ background: "var(--success-bg)", color: "var(--success)" }}><Icon name="bot" size={16} /></span>
+            <span><b>Chat linked</b>{link.username && <span className="muted"> · @{link.username}</span>}</span>
+          </span>
+          <Button variant="danger" onClick={unlink} disabled={busy}>Unlink</Button>
         </div>
-
-        {link?.linked ? (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ fontSize: 13 }}>
-              <span style={{ color: "var(--success)", fontWeight: 700 }}>Linked</span>
-              {link.username ? <span style={{ color: "var(--text-muted)" }}> · @{link.username}</span> : null}
-            </div>
-            <button onClick={unlink} disabled={busy} style={buttonStyle}>
-              Unlink
-            </button>
-          </div>
-        ) : link?.pendingCode ? (
-          <div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 10 }}>
-              Open the bot in Telegram and send:
-            </div>
-            <div style={{ ...numStyle, fontSize: 22, fontWeight: 800, letterSpacing: "0.06em", marginBottom: 10 }}>
+      ) : link?.pendingCode ? (
+        <div className="stack" style={{ gap: 10 }}>
+          <span className="small muted">Open the bot in Telegram and send this message:</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <code className="num" style={{ fontSize: 20, fontWeight: 600, letterSpacing: "0.04em", padding: "8px 14px", background: "var(--bg-card-2)", borderRadius: 8, border: "1px dashed var(--border-strong)" }}>
               /start {link.pendingCode}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              Single use. Expires {link.codeExpiresAt ? new Date(link.codeExpiresAt).toLocaleTimeString() : "shortly"}.
-            </div>
-            <button onClick={issue} disabled={busy} style={{ ...buttonStyle, marginTop: 14 }}>
-              {busy ? "Working…" : "New code"}
-            </button>
+            </code>
+            <Button size="sm" onClick={() => navigator.clipboard?.writeText(`/start ${link.pendingCode}`)}>Copy</Button>
           </div>
-        ) : (
-          <button onClick={issue} disabled={busy} style={buttonStyle}>
-            {busy ? "Working…" : "Link a Telegram chat"}
-          </button>
-        )}
+          <span className="small muted">Single use · expires {link.codeExpiresAt ? new Date(link.codeExpiresAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "shortly"}</span>
+          <div><Button icon="sync" onClick={issue} disabled={busy}>{busy ? "Working…" : "New code"}</Button></div>
+        </div>
+      ) : (
+        <Button variant="primary" icon="bot" onClick={issue} disabled={busy}>{busy ? "Working…" : "Link a Telegram chat"}</Button>
+      )}
 
-        {msg && <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 12 }}>{msg}</div>}
-      </div>
-    </section>
+      {msg && <div className="small" style={{ color: "var(--danger)", marginTop: 12 }}>{msg}</div>}
+    </Section>
   );
 }
 
@@ -972,7 +646,7 @@ function ActivityCard() {
       setLogs(data.logs || []);
       setHint(data.error || null);
     } catch {
-      setHint("Failed to load logs");
+      setHint("Could not load the activity log");
     }
     setLoading(false);
   }, [filter]);
@@ -981,159 +655,45 @@ function ActivityCard() {
     load();
   }, [load]);
 
-  const levelColor = (l) => (l === "error" ? "var(--danger)" : l === "warn" ? "var(--warning)" : "var(--info)");
-  const levelBg = (l) => (l === "error" ? "var(--danger-bg)" : l === "warn" ? "var(--warning-bg)" : "var(--bg-card-2)");
-
+  const tone = (l) => (l === "error" ? "bad" : l === "warn" ? "warn" : "info");
   const fmtDt = (s) => new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
   return (
-    <section>
-      <h2 style={sectionLabelStyle}>Activity Log</h2>
-      <div style={cardStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            {["all", "error", "warn", "info"].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                style={{
-                  padding: "7px 14px",
-                  borderRadius: 999,
-                  border: "1px solid",
-                  borderColor: filter === f ? "var(--brand)" : "var(--border)",
-                  background: filter === f ? "var(--brand-subtle)" : "transparent",
-                  color: filter === f ? "var(--brand)" : "var(--text-muted)",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: "capitalize",
-                  letterSpacing: "0.04em",
-                  fontFamily: "var(--font-display)",
-                  cursor: "pointer",
-                }}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={load}
-            style={{
-              padding: "7px 14px",
-              borderRadius: 999,
-              border: "1px solid var(--border)",
-              background: "var(--bg-card-2)",
-              color: "var(--text)",
-              fontSize: 11,
-              fontWeight: 700,
-              fontFamily: "var(--font-display)",
-              letterSpacing: "0.04em",
-              cursor: "pointer",
-            }}
-          >
-            Refresh
-          </button>
-        </div>
-
-        {hint && (
-          <div style={{ padding: 12, background: "var(--warning-bg)", borderRadius: 10, fontSize: 12, color: "var(--warning)", marginBottom: 14 }}>
-            {hint}
-          </div>
-        )}
-
-        {loading ? (
-          <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>Loading…</div>
-        ) : logs.length === 0 ? (
-          <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>No logs yet.</div>
-        ) : (
-          <div style={{ maxHeight: 480, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-            {logs.map((log) => (
-              <div
-                key={log.id}
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: 10,
-                  background: levelBg(log.level),
-                  borderLeft: `3px solid ${levelColor(log.level)}`,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span
-                      style={{
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        padding: "3px 8px",
-                        borderRadius: 4,
-                        background: levelColor(log.level),
-                        color: "#fff",
-                        fontFamily: "var(--font-display)",
-                      }}
-                    >
-                      {log.level}
-                    </span>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, fontFamily: "var(--font-display)" }}>{log.source}</span>
-                    <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{log.event}</span>
-                  </div>
-                  <span style={{ fontSize: 10, color: "var(--text-muted)", ...numStyle }}>{fmtDt(log.created_at)}</span>
+    <Section id="activity" title="Activity log" flush action={
+      <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <Segmented label="Level" value={filter} onChange={setFilter} options={[{ value: "all", label: "All" }, { value: "error", label: "Errors" }, { value: "warn", label: "Warnings" }, { value: "info", label: "Info" }]} />
+        <Button size="sm" variant="ghost" icon="sync" onClick={load} aria-label="Refresh" />
+      </span>
+    }>
+      {hint && <div style={{ padding: "0 16px 12px" }}><Banner title={hint} /></div>}
+      {loading ? (
+        <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 160 }} /></div>
+      ) : logs.length === 0 ? (
+        <Empty icon="activity" title="Nothing logged">Sync runs, receipts and statements leave a trail here.</Empty>
+      ) : (
+        <div style={{ maxHeight: 480, overflowY: "auto" }}>
+          {logs.map((log) => (
+            <div key={log.id} className="list-row" style={{ alignItems: "flex-start" }}>
+              <Chip tone={tone(log.level)}>{log.level}</Chip>
+              <span className="grow">
+                <div style={{ fontSize: 13 }}>
+                  <b>{log.source}</b> <span className="muted">{log.event}</span>
                 </div>
-                {log.message && <div style={{ fontSize: 12, color: "var(--text)" }}>{log.message}</div>}
+                {log.message && <div className="small" style={{ color: "var(--text-secondary)", marginTop: 2, whiteSpace: "normal" }}>{log.message}</div>}
                 {log.details && (
-                  <details style={{ marginTop: 6 }}>
-                    <summary style={{ fontSize: 10, color: "var(--text-muted)", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 700 }}>Details</summary>
-                    <pre style={{ fontSize: 10, color: "var(--text-secondary)", overflow: "auto", marginTop: 6, padding: 10, background: "var(--bg-card)", borderRadius: 6 }}>
+                  <details style={{ marginTop: 4 }}>
+                    <summary className="small muted" style={{ cursor: "pointer" }}>Details</summary>
+                    <pre className="num" style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "auto", marginTop: 6, padding: 10, background: "var(--bg-card-2)", borderRadius: 6 }}>
                       {JSON.stringify(log.details, null, 2)}
                     </pre>
                   </details>
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function AccountCard() {
-  return (
-    <section>
-      <h2 style={sectionLabelStyle}>Account</h2>
-      <div style={cardStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 4, fontFamily: "var(--font-display)" }}>Sign out</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>End your session on this device.</div>
-          </div>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            style={{
-              padding: "10px 20px",
-              borderRadius: 10,
-              border: "1px solid var(--danger)",
-              background: "transparent",
-              color: "var(--danger)",
-              fontSize: 13,
-              fontWeight: 700,
-              fontFamily: "var(--font-display)",
-              letterSpacing: "0.02em",
-              cursor: "pointer",
-              transition: "all 0.15s",
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "var(--danger)";
-              e.currentTarget.style.color = "#fff";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = "var(--danger)";
-            }}
-          >
-            Sign out
-          </button>
+              </span>
+              <span className="num small muted" style={{ whiteSpace: "nowrap" }}>{fmtDt(log.created_at)}</span>
+            </div>
+          ))}
         </div>
-      </div>
-    </section>
+      )}
+    </Section>
   );
 }

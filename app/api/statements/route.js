@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { runStatementJob, reconcileStatement } from "@/lib/statement-recon";
+import { signedUrl } from "@/lib/storage";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -31,7 +32,19 @@ export async function GET(request) {
       .eq("statement_id", statementId)
       .order("line_no", { ascending: true });
 
-    return NextResponse.json({ statement, lines: lines || [] });
+    // A short-lived link to the decrypted PDF, minted only on request, so the
+    // dashboard can show the bank's own document beside the reconciliation.
+    let url = null;
+    if (statement.storage_path) {
+      try {
+        url = await signedUrl(statement.storage_path);
+      } catch {
+        // The row can outlive its object; the lines still render.
+      }
+    }
+
+    const { parsed, ...rest } = statement;
+    return NextResponse.json({ statement: rest, lines: lines || [], url });
   }
 
   const { data } = await sb

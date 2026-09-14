@@ -4,14 +4,34 @@ import { authOptions } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { currentCycle } from "@/lib/cycles";
 import { buildSubmission } from "@/lib/submission";
+import { signedUrl } from "@/lib/storage";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-/** Submission history for the dashboard. */
-export async function GET() {
+/** Submission history for the dashboard; `?id=` mints a download link for one package. */
+export async function GET(request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const id = new URL(request.url).searchParams.get("id");
+  if (id) {
+    const { data: submission } = await getSupabaseAdmin()
+      .from("submissions")
+      .select("id, zip_path")
+      .eq("id", id)
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    if (!submission) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!submission.zip_path) return NextResponse.json({ error: "This package has no file yet" }, { status: 404 });
+    try {
+      const filename = submission.zip_path.split("/").pop();
+      const url = await signedUrl(submission.zip_path, { download: filename });
+      return NextResponse.json({ url });
+    } catch (err) {
+      return NextResponse.json({ error: `The package file could not be read: ${err.message}` }, { status: 500 });
+    }
+  }
 
   const { data } = await getSupabaseAdmin()
     .from("submissions")
