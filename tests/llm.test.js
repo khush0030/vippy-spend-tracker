@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseModelRef, stripJsonFence, chatJson } from "../lib/llm.js";
+import { parseModelRef, stripJsonFence, chatJson, chatWithTools } from "../lib/llm.js";
 
 test("model refs carry their provider", () => {
   assert.deepEqual(parseModelRef("sarvam:sarvam-105b"), { provider: "sarvam", model: "sarvam-105b" });
@@ -103,4 +103,34 @@ test("truncated but non-empty content is reported as truncated, not accepted", a
   process.env.SARVAM_API_KEY = "sk-test";
   const { fetch } = fakeFetch(() => ok({ choices: [{ finish_reason: "length", message: { content: "partial answer" } }] }));
   await assert.rejects(chatJson({ ref: "sarvam:sarvam-105b", user: "u", fetch }), /output truncated \(finish_reason: length\)/);
+});
+
+test("chatWithTools sends tools and returns the assistant message with its tool_calls", async () => {
+  process.env.SARVAM_API_KEY = "sk-test";
+  const call = { id: "call_1", type: "function", function: { name: "spend_summary", arguments: '{"period":"this_cycle"}' } };
+  const { fetch, calls } = fakeFetch(() => ok({ choices: [{ finish_reason: "tool_calls", message: { role: "assistant", content: null, tool_calls: [call] } }] }));
+  const tools = [{ type: "function", function: { name: "spend_summary", parameters: { type: "object" } } }];
+  const res = await chatWithTools({ ref: "sarvam:sarvam-105b", messages: [{ role: "user", content: "hi" }], tools, fetch });
+  assert.equal(res.finishReason, "tool_calls");
+  assert.deepEqual(res.message.tool_calls, [call]);
+  assert.deepEqual(calls[0].body.tools, tools);
+  assert.equal(calls[0].body.tool_choice, "auto");
+  assert.equal(calls[0].body.reasoning_effort, null);
+  assert.equal(calls[0].body.max_tokens, 2048);
+});
+
+test("chatWithTools on openai uses max_completion_tokens and honours tool_choice none", async () => {
+  process.env.OPENAI_API_KEY = "oa-test";
+  const { fetch, calls } = fakeFetch(() => ok({ choices: [{ finish_reason: "stop", message: { role: "assistant", content: "done" } }] }));
+  const res = await chatWithTools({ ref: "openai:gpt-5.6", messages: [{ role: "user", content: "hi" }], tools: [], toolChoice: "none", fetch });
+  assert.equal(res.message.content, "done");
+  assert.equal(calls[0].body.max_completion_tokens, 2048);
+  assert.equal(calls[0].body.tool_choice, "none");
+  assert.equal("temperature" in calls[0].body, false);
+});
+
+test("chatWithTools reports a missing choice as an error", async () => {
+  process.env.SARVAM_API_KEY = "sk-test";
+  const { fetch } = fakeFetch(() => ok({ choices: [] }));
+  await assert.rejects(chatWithTools({ ref: "sarvam:sarvam-105b", messages: [], tools: [], fetch }), /returned no message/);
 });
