@@ -127,6 +127,8 @@ test("chatWithTools on openai uses max_completion_tokens and honours tool_choice
   assert.equal(calls[0].body.max_completion_tokens, 2048);
   assert.equal(calls[0].body.tool_choice, "none");
   assert.equal("temperature" in calls[0].body, false);
+  // gpt-5.6 rejects function tools on chat/completions unless reasoning is fully off.
+  assert.equal(calls[0].body.reasoning_effort, "none");
 });
 
 test("chatWithTools reports a missing choice as an error", async () => {
