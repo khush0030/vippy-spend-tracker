@@ -1,7 +1,7 @@
 // tests/chat-prompt.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { systemPrompt, splitTelegram, sanitizeHistory } from "../lib/chat-prompt.js";
+import { systemPrompt, splitTelegram, sanitizeHistory, htmlToPlain } from "../lib/chat-prompt.js";
 
 test("the system prompt states the date, the cycle and the rules that matter", () => {
   const p = systemPrompt({ today: "2026-09-15", cycle: { cycle_start: "2026-08-17", cycle_end: "2026-09-16" }, cardLabel: "HDFC Corporate ···7634" });
@@ -67,4 +67,9 @@ test("history drops stray and leading tool rows", () => {
     { role: "user", content: "hi" },
     { role: "assistant", content: "ok" },
   ]);
+});
+
+test("HTML the model wrote reads right as plain text", () => {
+  assert.equal(htmlToPlain("<b>AT&amp;T</b> &lt;₹500&gt; <i>ok</i>"), "AT&T <₹500> ok");
+  assert.equal(htmlToPlain("&amp;lt;"), "&lt;");
 });
