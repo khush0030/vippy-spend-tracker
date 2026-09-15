@@ -136,3 +136,12 @@ test("chatWithTools reports a missing choice as an error", async () => {
   const { fetch } = fakeFetch(() => ok({ choices: [] }));
   await assert.rejects(chatWithTools({ ref: "sarvam:sarvam-105b", messages: [], tools: [], fetch }), /returned no message/);
 });
+
+test("chatWithTools gives the request a timeout signal; chatJson has none by default", async () => {
+  process.env.SARVAM_API_KEY = "sk-test";
+  const { fetch, calls } = fakeFetch(() => ok({ choices: [{ message: { role: "assistant", content: "x" } }] }));
+  await chatWithTools({ ref: "sarvam:sarvam-105b", messages: [], tools: [], fetch });
+  await chatJson({ ref: "sarvam:sarvam-105b", user: "u", fetch });
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal(calls[1].init.signal, undefined);
+});
