@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { syncUserTransactions } from "@/lib/sync";
 import { sendMonthlyReportForUser } from "@/lib/monthly-report";
 import { getCardAccount, cycleAwaitingSubmission, currentCycle } from "@/lib/cycles";
+import { runPing } from "@/lib/ping";
 import { buildAndRequestApproval } from "@/lib/submission-approval";
 import { rematchPendingReceipts } from "@/lib/match-service";
 import { retryFailedExtractions } from "@/lib/receipt-pipeline";
@@ -147,6 +148,9 @@ async function runJob(job, user) {
       });
       return { inserted: r?.inserted ?? 0, alerted: health.alerted };
     }
+
+    case "ping":
+      return runPing(user.id);
 
     case "rematch": {
       // Safety net: sync already rematches after an insert, but a receipt whose
