@@ -35,3 +35,14 @@ test("unknown specs throw", () => {
   assert.throws(() => resolvePeriod("", ctx), /Unknown period/);
   assert.throws(() => resolvePeriod("2026-13", ctx), /Unknown period/);
 });
+
+test("last_cycle survives a cycle that opens at a month end", () => {
+  // Statement day 30: March's cycle closes on the 30th, so April's opens on
+  // the 31st. Subtracting a calendar month from 31 March must not land in
+  // March again.
+  const c = { today: "2026-04-10", cycle: { cycle_start: "2026-03-31", cycle_end: "2026-04-30" } };
+  assert.deepEqual(resolvePeriod("last_cycle", c), { start: "2026-03-01", end: "2026-03-30", label: "last cycle (1 Mar – 30 Mar)" });
+  // And a February close, where the statement day itself is clamped.
+  const f = { today: "2026-02-10", cycle: { cycle_start: "2026-01-31", cycle_end: "2026-02-28" } };
+  assert.deepEqual(resolvePeriod("last_cycle", f), { start: "2025-12-31", end: "2026-01-30", label: "last cycle (31 Dec – 30 Jan)" });
+});
