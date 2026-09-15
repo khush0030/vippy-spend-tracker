@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
+import { renameMerchant } from "@/lib/merchant-alias";
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
@@ -27,32 +28,8 @@ export async function POST(request) {
     const supabase = getSupabase();
     const userId = session.user.id;
 
-    const { data: updatedRows, error: updateError } = await supabase
-      .from("transactions")
-      .update({ merchant: toName })
-      .eq("user_id", userId)
-      .eq("merchant", fromName)
-      .select("id");
-
-    if (updateError) throw updateError;
-
-    const { error: aliasError } = await supabase
-      .from("merchant_aliases")
-      .upsert(
-        { user_id: userId, original_merchant: fromName, alias: toName },
-        { onConflict: "user_id,original_merchant" }
-      );
-
-    if (aliasError && aliasError.code !== "42P01") {
-      // 42P01 = table doesn't exist; tolerate so rename still works without the table
-      throw aliasError;
-    }
-
-    return NextResponse.json({
-      success: true,
-      updated: updatedRows?.length || 0,
-      aliasStored: !aliasError,
-    });
+    const { updated, aliasStored } = await renameMerchant({ supabase, userId, from: fromName, to: toName });
+    return NextResponse.json({ success: true, updated, aliasStored });
   } catch (error) {
     return NextResponse.json(
       { error: error.message || "Failed to rename merchant" },
