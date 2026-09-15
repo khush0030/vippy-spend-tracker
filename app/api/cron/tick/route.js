@@ -18,32 +18,42 @@ export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 /**
- * Single daily cron dispatcher.
+ * Single cron dispatcher.
  *
- * Vercel's Hobby plan allows two cron jobs, once daily — and the app already
- * used both. Rather than pay for slots, one job runs every day and branches on
- * the date, so the schedule lives in code where it is testable and versioned.
+ * The cron fires hourly (Vercel Pro); sync and ping run every tick, the rest
+ * at 03:30 UTC. Rather than pay for more slots, one job runs every hour and
+ * branches on the date and hour, so the schedule lives in code where it is
+ * testable and versioned.
  *
  * Every job is independently runnable with ?job=<name> for manual triggers and
  * debugging, which is worth more than the cron slots themselves.
  *
- *   sync       every day   Gmail → Claude → transactions
- *   rematch    every day   bind receipts that arrived before their bank alert
- *   nudge      every day   chase charges still lacking a receipt
- *   mailboxes  every day   credential health check, alert on failure transition
- *   statement  days 17-19  ingest + reconcile the card statement
- *   harvest    days 17-23  sweep invoices from email and bind them to charges
- *   submit     day 23      build the verified package for approval
- *   report     day 4       the existing monthly report
+ *   sync       every tick     Gmail → Claude → transactions
+ *   ping       every tick     instant receipt pings for new charges
+ *   rematch    03:30 UTC      bind receipts that arrived before their bank alert
+ *   nudge      03:30 UTC      chase charges still lacking a receipt
+ *   mailboxes  03:30 UTC      credential health check, alert on failure transition
+ *   statement  03:30, days 17-19  ingest + reconcile the card statement
+ *   harvest    03:30, days 17-23  sweep invoices from email and bind them to charges
+ *   submit     03:30, day 23  build the verified package for approval
+ *   report     03:30, day 4   the existing monthly report
  */
 
-const JOBS = ["sync", "rematch", "nudge", "harvest", "statement", "submit", "report", "mailboxes"];
+const JOBS = ["sync", "ping", "rematch", "nudge", "harvest", "statement", "submit", "report", "mailboxes"];
 
-function jobsForToday(day, card) {
+/**
+ * The cron fires every hour. Sync and the receipt ping run on every tick;
+ * everything else belongs to the 03:30 UTC tick (09:00 IST), where it has
+ * always run.
+ */
+function jobsForToday(day, card, hourUtc) {
+  const due = ["sync", "ping"];
+  if (hourUtc !== 3) return due;
+
   const statementDay = card?.statement_day ?? 18;
   const submitDay = card?.submit_day ?? 23;
 
-  const due = ["sync", "rematch", "nudge", "mailboxes"];
+  due.push("rematch", "nudge", "mailboxes");
   // The statement is dated on `statement_day` but the email lands a day or two
   // later, so the ingest is attempted on the following three days. Repeats are
   // free: a statement already on file is skipped by its Gmail message id.
@@ -89,7 +99,7 @@ export async function GET(request) {
 
   for (const user of users || []) {
     const card = await getCardAccount(user.id).catch(() => null);
-    const due = requested ? [requested] : jobsForToday(today, card);
+    const due = requested ? [requested] : jobsForToday(today, card, new Date().getUTCHours());
     const perUser = { email: user.email, ran: [] };
 
     for (const job of due) {
