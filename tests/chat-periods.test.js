@@ -46,3 +46,9 @@ test("last_cycle survives a cycle that opens at a month end", () => {
   const f = { today: "2026-02-10", cycle: { cycle_start: "2026-01-31", cycle_end: "2026-02-28" } };
   assert.deepEqual(resolvePeriod("last_cycle", f), { start: "2025-12-31", end: "2026-01-30", label: "last cycle (31 Dec – 30 Jan)" });
 });
+
+test("a lone date is that one day", () => {
+  const ctx = { today: "2026-09-15", cycle: null };
+  assert.deepEqual(resolvePeriod("2026-09-09", ctx), { start: "2026-09-09", end: "2026-09-09", label: "9 Sep" });
+  assert.throws(() => resolvePeriod("2026-02-30", ctx), /Unknown period/);
+});

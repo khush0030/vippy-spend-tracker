@@ -25,3 +25,8 @@ test("long replies split at line breaks under Telegram's cap", () => {
 test("a short reply is one part", () => {
   assert.deepEqual(splitTelegram("hello"), ["hello"]);
 });
+
+test("the prompt forbids totals the model added up itself", () => {
+  const p = systemPrompt({ today: "2026-09-15", cycle: null, cardLabel: "card" });
+  assert.match(p, /never add up/i);
+});
