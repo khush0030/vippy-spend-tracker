@@ -20,7 +20,7 @@ Paste this at the start of a new chat to resume. Written 2026-09-15.
 
 | Task | State |
 |---|---|
-| 1 migration + hourly cron | done `957ef6a` — **SQL NOT YET RUN in Supabase** (`scripts/chat-migration.sql`) |
+| 1 migration + hourly cron | done `957ef6a`; migration run and verified |
 | 2 `lib/ping-plan.js` | done, reviewed |
 | 3 `lib/ping.js` + buttons + digest exclusion | done, reviewed; race fixed `4866dda` |
 | 4 `chatWithTools` in `lib/llm.js` | done, reviewed |
@@ -52,8 +52,6 @@ onto my branch. **Always `git branch --show-current` before acting**, and expect
 
 ## Still owed to Khush / by Khush
 
-- Run `scripts/chat-migration.sql` in the Supabase SQL editor (Khush, one paste) — needed
-  before `ping` and chat can work live.
 - 42 bogus HDFC-alert "receipts" from the first harvest run still need deleting (Khush said
   nothing yet; the delete was blocked by the permission classifier).
 - Historical `transactions` rows (pre-2026-09-14) may have shifted `email_id`/`date` from the
