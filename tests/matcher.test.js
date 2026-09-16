@@ -8,6 +8,8 @@ import {
   decide,
   expectedInrBand,
   findSplit,
+  isSameBill,
+  isCovered,
 } from "../lib/matcher.js";
 
 const txn = (o = {}) => ({
@@ -325,5 +327,43 @@ describe("findSplit", () => {
     assert.equal(findSplit([r("a", 11297)], charge), null);
     assert.equal(findSplit([r("a", 8999, { currency: "USD" }), r("b", 2298, { currency: "USD" })], charge), null);
     assert.equal(findSplit([r("a", 8999), r("b", 2298)], { ...charge, date: "2026-09-20" }), null);
+  });
+});
+
+describe("isSameBill", () => {
+  const b = (o = {}) => ({ merchant: "Shreemaya Bakery", amount: 260, currency: "INR", receipt_date: "2026-08-24", receipt_time: "18:03", invoice_no: "115", ...o });
+
+  test("two photos of one bill: same amount, day, merchant and time", () => {
+    assert.ok(isSameBill(b(), b({ invoice_no: "031121" })));
+    assert.ok(isSameBill(b({ merchant: "Kara by K&Y" }), b({ merchant: "Kara" })));
+  });
+
+  test("the same invoice number is the same bill even without a time", () => {
+    assert.ok(isSameBill(b({ receipt_time: null, invoice_no: "X1" }), b({ receipt_time: null, invoice_no: "X1" })));
+  });
+
+  test("two items of one order are separate bills", () => {
+    const c = { merchant: "Clicktech Retail Private Limited", amount: 1149, currency: "INR", receipt_date: "2026-08-31", receipt_time: null };
+    assert.equal(isSameBill({ ...c, invoice_no: "BOM7-1207947" }, { ...c, invoice_no: "BBX1-472105" }), false);
+  });
+
+  test("different amount, day, currency or merchant is never the same bill", () => {
+    assert.equal(isSameBill(b(), b({ amount: 261 })), false);
+    assert.equal(isSameBill(b(), b({ receipt_date: "2026-08-25" })), false);
+    assert.equal(isSameBill(b(), b({ currency: "USD" })), false);
+    assert.equal(isSameBill(b(), b({ merchant: "Veritrade" })), false);
+    assert.equal(isSameBill(b({ receipt_time: null, invoice_no: null }), b({ receipt_time: null, invoice_no: null })), false);
+  });
+});
+
+describe("isCovered", () => {
+  const charge = { amount: 11297 };
+  test("a charge is covered once its bills reach its amount", () => {
+    assert.equal(isCovered(charge, [{ amount: 8999, currency: "INR" }, { amount: 1149, currency: "INR" }]), false);
+    assert.ok(isCovered(charge, [{ amount: 8999, currency: "INR" }, { amount: 1149, currency: "INR" }, { amount: 1149, currency: "INR" }]));
+    assert.equal(isCovered(charge, []), false);
+  });
+  test("any foreign bill covers its charge, since the amounts never add up in rupees", () => {
+    assert.ok(isCovered({ amount: 7884.8 }, [{ amount: 79.24, currency: "USD" }]));
   });
 });

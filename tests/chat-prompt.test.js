@@ -83,6 +83,7 @@ test("a filed receipt becomes a history note the model can read", () => {
   assert.match(receiptNote({ ...r, merchant: null }, { action: "auto", best: { transaction_id: 591 } })[1].content, /unknown merchant.*Matched to transaction 591/);
   assert.match(receiptNote(r, { action: "ask", candidates: [{}, {}] })[1].content, /2 charges could fit/);
   assert.match(receiptNote(r, null)[1].content, /could not be read yet/);
+  assert.match(receiptNote(r, { action: "duplicate", best: { transaction_id: 579 } })[1].content, /579 already has its bill.*duplicate/);
 });
 
 test("a reply that states figures is caught; a plain one is not", () => {

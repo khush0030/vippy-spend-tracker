@@ -75,6 +75,25 @@ describe("reconcile — every line lands in exactly one bucket", () => {
     assert.notEqual(r.tied[0].transaction.id, r.tied[1].transaction.id);
   });
 
+  test("an earlier line of a different merchant does not steal a charge within tolerance", () => {
+    // Real Aug 2026 statement: an Uber line (319.81) read first took the KM
+    // Pizza charge (320), and the pizza line was then created a second time.
+    const r = reconcile({
+      lines: [
+        line({ i: 0, date: "2026-07-29", description: "UBER *TRIP HELP.UBER.COM Amsterdam", amount: 319.81, direction: "debit" }),
+        line({ i: 1, date: "2026-07-31", description: "KM PIZZA REVOLUCNIPRAHA 1", amount: 320, direction: "debit" }),
+      ],
+      transactions: [txn({ id: 346, merchant: "KM Pizza", amount: 320, date: "2026-07-31" })],
+      statement,
+    });
+
+    assert.equal(r.tied.length, 1);
+    assert.equal(r.tied[0].line.descriptor, "KM PIZZA REVOLUCNIPRAHA 1");
+    assert.equal(r.tied[0].transaction.id, 346);
+    assert.equal(r.createdFromStatement.length, 1);
+    assert.match(r.createdFromStatement[0].line.descriptor, /UBER/);
+  });
+
   test("a charge in the app but not on the statement rolls forward, it is not deleted", () => {
     const r = reconcile({
       lines: [],
