@@ -50,3 +50,4 @@ test-report.pdf
 # local scratch
 .tmp/
 .playwright-mcp/
+backups/
