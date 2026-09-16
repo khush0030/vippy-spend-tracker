@@ -52,3 +52,12 @@ test("a lone date is that one day", () => {
   assert.deepEqual(resolvePeriod("2026-09-09", ctx), { start: "2026-09-09", end: "2026-09-09", label: "9 Sep" });
   assert.throws(() => resolvePeriod("2026-02-30", ctx), /Unknown period/);
 });
+
+test("billing_cycle is the cycle being paid, not the one that opened today", () => {
+  const cycle = { cycle_start: "2026-09-17", cycle_end: "2026-10-16" };
+  const billing = { cycle_start: "2026-08-17", cycle_end: "2026-09-16" };
+  const p = resolvePeriod("billing_cycle", { today: "2026-09-17", cycle, billing });
+  assert.equal(p.start, "2026-08-17");
+  assert.equal(p.end, "2026-09-16");
+  assert.equal(resolvePeriod("this_cycle", { today: "2026-09-17", cycle, billing }).start, "2026-09-17");
+});

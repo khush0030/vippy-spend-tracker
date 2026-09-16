@@ -99,3 +99,8 @@ test("rupee figures not in this turn's tool results are flagged", () => {
   assert.deepEqual(ungroundedAmounts("totaling <b>₹63,652.96</b>, Amazon ₹11,297.00", tools), ["₹63,652.96"]);
   assert.deepEqual(ungroundedAmounts("Nothing to add", []), []);
 });
+
+test("after the statement closes, the prompt names the billing cycle for missing receipts", () => {
+  const p = systemPrompt({ today: "2026-09-17", cycle: { cycle_start: "2026-09-17", cycle_end: "2026-10-16" }, billing: { cycle_start: "2026-08-17", cycle_end: "2026-09-16" }, cardLabel: "HDFC" });
+  assert.match(p, /billing cycle.*2026-08-17 to 2026-09-16/);
+});

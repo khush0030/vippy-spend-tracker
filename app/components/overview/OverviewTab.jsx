@@ -148,7 +148,9 @@ export default function OverviewTab({
           title={`${missing} charge${missing === 1 ? "" : "s"} still need a receipt`}
           action={<Button variant="primary" onClick={onOpenReceipts}>Review</Button>}
         >
-          {receiptSummary?.coverage?.coveragePct ?? 0}% of this cycle is covered · cycle ends {receiptSummary?.cycle?.end ? fmtShort(receiptSummary.cycle.end) : "soon"}
+          {receiptSummary?.coverage?.coveragePct ?? 0}% of this cycle is covered · {receiptSummary?.cycle?.end
+            ? `${receiptSummary.cycle.end < new Date().toISOString().slice(0, 10) ? "statement closed" : "cycle ends"} ${fmtShort(receiptSummary.cycle.end)}`
+            : "cycle ends soon"}
         </Banner>
       )}
 

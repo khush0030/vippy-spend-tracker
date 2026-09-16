@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { cycleWindow, cycleMilestones } from "../lib/cycle-window.js";
+import { cycleWindow, cycleMilestones, previousWindow, billingWindow, localToday } from "../lib/cycle-window.js";
 
 // The statement is DATED the statement day and covers the period ending that
 // day — HDFC's 16 August statement runs 17 July to 16 August. So the cycle
@@ -107,5 +107,42 @@ describe("cycleMilestones", () => {
 
   test("a nonsense cycle end returns nothing rather than a wrong date", () => {
     assert.equal(cycleMilestones("not-a-date", 23), null);
+  });
+});
+
+describe("previousWindow — the cycle that closed before today's", () => {
+  test("the morning after a 16th statement, the billed cycle is the one that just closed", () => {
+    assert.deepEqual(previousWindow(16, "2026-09-17"), { start: "2026-08-17", end: "2026-09-16" });
+    assert.deepEqual(previousWindow(16, "2026-10-16"), { start: "2026-08-17", end: "2026-09-16" });
+  });
+  test("across a year end and a short month", () => {
+    assert.deepEqual(previousWindow(16, "2027-01-05"), { start: "2026-11-17", end: "2026-12-16" });
+    assert.deepEqual(previousWindow(31, "2026-03-10"), { start: "2026-02-01", end: "2026-02-28" });
+  });
+});
+
+describe("billingWindow — whose receipts are being chased (statement 16th, submit 23rd)", () => {
+  const w = (today, submitted = false) => billingWindow({ statementDay: 16, submitDay: 23, today, previousSubmitted: submitted });
+
+  test("from the morning after the statement to the submit day, the closed cycle", () => {
+    assert.deepEqual(w("2026-09-17"), { start: "2026-08-17", end: "2026-09-16", closed: true });
+    assert.deepEqual(w("2026-09-23"), { start: "2026-08-17", end: "2026-09-16", closed: true });
+  });
+
+  test("after the package is due or sent, the open cycle", () => {
+    assert.deepEqual(w("2026-09-24"), { start: "2026-09-17", end: "2026-10-16", closed: false });
+    assert.deepEqual(w("2026-09-20", true), { start: "2026-09-17", end: "2026-10-16", closed: false });
+  });
+
+  test("before the statement closes, the open cycle is the one being billed", () => {
+    assert.deepEqual(w("2026-09-10"), { start: "2026-08-17", end: "2026-09-16", closed: false });
+    assert.deepEqual(w("2026-09-16"), { start: "2026-08-17", end: "2026-09-16", closed: false });
+  });
+});
+
+describe("localToday", () => {
+  test("is India's date, not the server's UTC date", () => {
+    assert.equal(localToday(new Date("2026-09-16T19:00:00Z")), "2026-09-17");
+    assert.equal(localToday(new Date("2026-09-16T18:00:00Z")), "2026-09-16");
   });
 });

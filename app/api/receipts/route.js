@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { currentCycle, cycleCoverage } from "@/lib/cycles";
+import { billingCycle, cycleCoverage } from "@/lib/cycles";
 import { signedUrl } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Everything the Receipts tab needs about the cycle in flight.
+ * Everything the Receipts tab needs about the cycle being billed: the one that
+ * just closed until its package is submitted, then the open one.
  *
  * Cycle-scoped rather than period-scoped: the dashboard's date picker is about
  * spend analysis, but a receipt belongs to whichever statement cycle will
@@ -45,7 +46,7 @@ export async function GET(request) {
     return NextResponse.json({ receipt: safe, url });
   }
 
-  const cycle = await currentCycle(userId).catch(() => null);
+  const cycle = await billingCycle(userId).catch(() => null);
   if (!cycle) {
     return NextResponse.json({
       configured: false,
