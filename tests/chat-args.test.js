@@ -32,3 +32,7 @@ test("merchants are trimmed and bounded; dates must be ISO", () => {
 test("an unknown tool is rejected", () => {
   assert.match(validateArgs("drop_table", {}).error, /Unknown tool/);
 });
+
+test("waiting_receipts needs no arguments", () => {
+  assert.deepEqual(validateArgs("waiting_receipts", {}), { ok: true, args: {} });
+});

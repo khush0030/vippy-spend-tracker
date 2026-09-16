@@ -1,7 +1,7 @@
 // tests/chat-prompt.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { systemPrompt, splitTelegram, sanitizeHistory, htmlToPlain } from "../lib/chat-prompt.js";
+import { systemPrompt, splitTelegram, sanitizeHistory, htmlToPlain, receiptNote, statesFigures, ungroundedAmounts } from "../lib/chat-prompt.js";
 
 test("the system prompt states the date, the cycle and the rules that matter", () => {
   const p = systemPrompt({ today: "2026-09-15", cycle: { cycle_start: "2026-08-17", cycle_end: "2026-09-16" }, cardLabel: "HDFC Corporate ···7634" });
@@ -72,4 +72,29 @@ test("history drops stray and leading tool rows", () => {
 test("HTML the model wrote reads right as plain text", () => {
   assert.equal(htmlToPlain("<b>AT&amp;T</b> &lt;₹500&gt; <i>ok</i>"), "AT&T <₹500> ok");
   assert.equal(htmlToPlain("&amp;lt;"), "&lt;");
+});
+
+test("a filed receipt becomes a history note the model can read", () => {
+  const r = { merchant: "Veritrade", amount: 499, currency: "INR", receipt_date: "2026-09-07" };
+  assert.deepEqual(receiptNote(r, { action: "defer" }), [
+    { role: "user", content: "[sent a receipt photo]" },
+    { role: "assistant", content: "Saved receipt: Veritrade · INR 499 · 2026-09-07. Not matched to a charge yet — it is waiting for the bank alert." },
+  ]);
+  assert.match(receiptNote({ ...r, merchant: null }, { action: "auto", best: { transaction_id: 591 } })[1].content, /unknown merchant.*Matched to transaction 591/);
+  assert.match(receiptNote(r, { action: "ask", candidates: [{}, {}] })[1].content, /2 charges could fit/);
+  assert.match(receiptNote(r, null)[1].content, /could not be read yet/);
+});
+
+test("a reply that states figures is caught; a plain one is not", () => {
+  assert.ok(statesFigures("You now have <b>31 transactions</b> without receipts, totaling ₹63,652.96."));
+  assert.ok(statesFigures("Top: Amazon — 11,297"));
+  assert.equal(statesFigures("You're welcome! Anything else?"), false);
+  assert.equal(statesFigures(""), false);
+});
+
+test("rupee figures not in this turn's tool results are flagged", () => {
+  const tools = [JSON.stringify({ total_missing: 55183.74, rows: [{ amount: 11297 }, { amount: "170882" }] })];
+  assert.deepEqual(ungroundedAmounts("<b>₹55,183.74</b> left; Amazon Pay — ₹11,297; Zomato ₹1,70,882", tools), []);
+  assert.deepEqual(ungroundedAmounts("totaling <b>₹63,652.96</b>, Amazon ₹11,297.00", tools), ["₹63,652.96"]);
+  assert.deepEqual(ungroundedAmounts("Nothing to add", []), []);
 });
