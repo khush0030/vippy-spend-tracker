@@ -7,6 +7,7 @@ import {
   scoreCandidate,
   decide,
   expectedInrBand,
+  findSplit,
 } from "../lib/matcher.js";
 
 const txn = (o = {}) => ({
@@ -300,5 +301,29 @@ describe("decide", () => {
     ]);
     assert.equal(d.action, "auto");
     assert.equal(d.best.transaction_id, 2);
+  });
+});
+
+describe("findSplit", () => {
+  const r = (id, amount, o = {}) => ({ id, amount, currency: "INR", receipt_date: "2026-08-31", ...o });
+  const charge = { id: 578, amount: 11297, date: "2026-08-31" };
+
+  test("one order billed as three invoices binds to the single charge", () => {
+    const got = findSplit([r("a", 8999), r("b", 1149), r("c", 1149), r("d", 499)], charge);
+    assert.deepEqual(got.map((x) => x.id).sort(), ["a", "b", "c"]);
+  });
+
+  test("receipts from different days never combine", () => {
+    assert.equal(findSplit([r("a", 8999), r("b", 1149), r("c", 1149, { receipt_date: "2026-08-30" })], charge), null);
+  });
+
+  test("a sum reachable two ways is ambiguous and left alone", () => {
+    assert.equal(findSplit([r("a", 100), r("b", 200), r("c", 150), r("d", 150)], { id: 1, amount: 300, date: "2026-08-31" }), null);
+  });
+
+  test("a lone receipt, foreign money or a date out of window is not a split", () => {
+    assert.equal(findSplit([r("a", 11297)], charge), null);
+    assert.equal(findSplit([r("a", 8999, { currency: "USD" }), r("b", 2298, { currency: "USD" })], charge), null);
+    assert.equal(findSplit([r("a", 8999), r("b", 2298)], { ...charge, date: "2026-09-20" }), null);
   });
 });

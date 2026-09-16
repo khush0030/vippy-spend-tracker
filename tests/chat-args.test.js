@@ -36,3 +36,10 @@ test("an unknown tool is rejected", () => {
 test("waiting_receipts needs no arguments", () => {
   assert.deepEqual(validateArgs("waiting_receipts", {}), { ok: true, args: {} });
 });
+
+test("match_receipt takes a short receipt ref and one or more transaction ids", () => {
+  assert.deepEqual(validateArgs("match_receipt", { receipt_ref: "CAB7DAD5", transaction_ids: [591] }), { ok: true, args: { receipt_ref: "cab7dad5", transaction_ids: [591] } });
+  assert.deepEqual(validateArgs("match_receipt", { receipt_id: "cab7dad5-8c73-473b-b723-bca05fad2be9", transaction_id: "591" }).args, { receipt_ref: "cab7dad5", transaction_ids: [591] });
+  assert.equal(validateArgs("match_receipt", { receipt_ref: "xyz", transaction_ids: [591] }).ok, false);
+  assert.equal(validateArgs("match_receipt", { receipt_ref: "cab7dad5", transaction_ids: [] }).ok, false);
+});
