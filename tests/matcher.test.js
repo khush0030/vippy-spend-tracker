@@ -10,6 +10,7 @@ import {
   findSplit,
   isSameBill,
   isCovered,
+  tippedBill,
 } from "../lib/matcher.js";
 
 const txn = (o = {}) => ({
@@ -365,5 +366,23 @@ describe("isCovered", () => {
   });
   test("any foreign bill covers its charge, since the amounts never add up in rupees", () => {
     assert.ok(isCovered({ amount: 7884.8 }, [{ amount: 79.24, currency: "USD" }]));
+  });
+});
+
+describe("tippedBill", () => {
+  const meal = { category: "dining", amount: 8153.96 };
+  const pre = { id: "pre", amount: 70.3, currency: "EUR", receipt_date: "2026-08-10" };
+  const tipped = { id: "tip", amount: 73.82, currency: "EUR", receipt_date: "2026-08-10" };
+
+  test("two bills from one restaurant visit: the larger has the tip, so it is the one kept", () => {
+    assert.deepEqual(tippedBill(meal, [pre], tipped), { keep: tipped, drop: pre });
+    assert.deepEqual(tippedBill(meal, [tipped], pre), { keep: tipped, drop: pre });
+    assert.deepEqual(tippedBill({ ...meal, category: "swiggy" }, [pre], tipped), { keep: tipped, drop: pre });
+  });
+
+  test("not a restaurant, another day or another currency: no preference", () => {
+    assert.equal(tippedBill({ ...meal, category: "travel" }, [pre], tipped), null);
+    assert.equal(tippedBill(meal, [pre], { ...tipped, receipt_date: "2026-08-11" }), null);
+    assert.equal(tippedBill(meal, [pre], { ...tipped, currency: "INR" }), null);
   });
 });

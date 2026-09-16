@@ -6,7 +6,8 @@
  *      and unlinked — an alert is not a bill.
  *   2. A charge with more bills than it needs keeps the set that covers it,
  *      best-named merchant first. Copies are marked duplicate; another
- *      merchant's bill goes back to waiting. Real splits are kept.
+ *      merchant's bill goes back to waiting. Real splits are kept. At a
+ *      restaurant the larger same-day bill (the one with the tip) is kept.
  *   3. Unfiled copies of a filed bill are marked duplicate.
  *   4. Statement lines re-paired with the whole-statement matcher; a line that
  *      took another line's charge is swapped back.
@@ -16,7 +17,7 @@
 const { register } = require("esbuild-register/dist/node");
 register();
 const { getSupabaseAdmin } = require("../lib/supabase.js");
-const { isSameBill, isCovered, merchantSimilarity } = require("../lib/matcher.js");
+const { isSameBill, isCovered, merchantSimilarity, tippedBill } = require("../lib/matcher.js");
 const { reconcile } = require("../lib/recon.js");
 
 const APPLY = process.argv.includes("--apply");
@@ -45,7 +46,7 @@ async function dropLink(receiptId, transactionId, receiptStatus) {
 
   const { data: receipts } = await sb.from("receipts").select("*");
   const { data: links } = await sb.from("receipt_transactions").select("receipt_id, transaction_id, matched_by, match_score, created_at");
-  const { data: txns } = await sb.from("transactions").select("id, user_id, merchant, amount, date, receipt_status");
+  const { data: txns } = await sb.from("transactions").select("id, user_id, merchant, amount, date, receipt_status, category");
   const receiptById = new Map(receipts.map((r) => [r.id, r]));
   const txnById = new Map(txns.map((t) => [t.id, t]));
   let live = links.slice();
@@ -78,18 +79,22 @@ async function dropLink(receiptId, transactionId, receiptStatus) {
     const t = txnById.get(txnId);
     // The bill naming the charge's merchant stays; ties go to the most trusted link, then the oldest.
     const sim = (l) => merchantSimilarity(receiptById.get(l.receipt_id).merchant, t.merchant);
-    const ordered = ls.slice().sort((a, b) => sim(b) - sim(a) || (rank[a.matched_by] ?? 9) - (rank[b.matched_by] ?? 9) || String(a.created_at).localeCompare(String(b.created_at)));
+    // At a restaurant the larger bill of the day carries the tip, so it comes first.
+    const tipped = (a, b) => (tippedBill(t, [receiptById.get(a.receipt_id)], receiptById.get(b.receipt_id))?.keep.id === b.receipt_id ? 1 : 0)
+      - (tippedBill(t, [receiptById.get(b.receipt_id)], receiptById.get(a.receipt_id))?.keep.id === a.receipt_id ? 1 : 0);
+    const ordered = ls.slice().sort((a, b) => tipped(a, b) || sim(b) - sim(a) || (rank[a.matched_by] ?? 9) - (rank[b.matched_by] ?? 9) || String(a.created_at).localeCompare(String(b.created_at)));
     const kept = [];
     for (const l of ordered) {
       const r = receiptById.get(l.receipt_id);
       if (kept.some((k) => isSameBill(k, r)) || isCovered(t, kept)) {
         extra++;
-        if (l.matched_by === "user") {
+        const tipCopy = kept.some((k) => tippedBill(t, [k], r)?.drop.id === r.id);
+        if (l.matched_by === "user" && !tipCopy) {
           say(`   #${txnId} ${t.merchant} ${inr(t.amount)}: also carries ${r.merchant} ${r.currency} ${r.amount} (${r.id.slice(0, 8)}), which you filed yourself — left for you to decide`);
           continue;
         }
         // Another merchant's bill is misfiled, not a copy: it goes back to waiting for its own charge.
-        const copy = kept.some((k) => isSameBill(k, r) || merchantSimilarity(k.merchant, r.merchant) >= 0.5);
+        const copy = tipCopy || kept.some((k) => isSameBill(k, r) || merchantSimilarity(k.merchant, r.merchant) >= 0.5);
         const keep = kept.map((k) => `${k.merchant} ${k.currency} ${k.amount} (${k.id.slice(0, 8)})`).join(", ");
         say(`   #${txnId} ${t.merchant} ${inr(t.amount)}: keeps ${keep}; ${copy ? "duplicate" : "misfiled, back to waiting"}: ${r.merchant} ${r.currency} ${r.amount} (${r.id.slice(0, 8)}, ${l.matched_by})`);
         await dropLink(r.id, txnId, copy ? "duplicate" : "unmatched");
