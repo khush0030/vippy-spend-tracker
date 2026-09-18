@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { billingCycle, cycleCoverage } from "@/lib/cycles";
+import { billingCycle, cycleCoverage, cycleScope } from "@/lib/cycles";
 import { signedUrl } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +58,7 @@ export async function GET(request) {
   }
 
   const coverage = await cycleCoverage(userId, cycle);
+  const scope = await cycleScope(cycle);
   const minAmount = cycle.card?.min_receipt_amount ?? 500;
 
   const [{ data: receipts }, { data: outstanding }] = await Promise.all([
@@ -67,14 +68,14 @@ export async function GET(request) {
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(60),
-    sb
-      .from("transactions")
-      .select("id, merchant, amount, date, category")
-      .eq("user_id", userId)
-      .eq("is_refund", false)
-      .eq("receipt_status", "missing")
-      .gte("date", cycle.cycle_start)
-      .lte("date", cycle.cycle_end)
+    scope(
+      sb
+        .from("transactions")
+        .select("id, merchant, amount, date, category")
+        .eq("user_id", userId)
+        .eq("is_refund", false)
+        .eq("receipt_status", "missing")
+    )
       .gte("amount", minAmount)
       .order("amount", { ascending: false })
       .limit(50),
