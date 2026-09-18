@@ -386,3 +386,24 @@ describe("tippedBill", () => {
     assert.equal(tippedBill(meal, [pre], { ...tipped, currency: "INR" }), null);
   });
 });
+
+describe("merchantSimilarity — the company on the bill vs the brand on the card", () => {
+  test("legal names read as the brand the statement shows", () => {
+    assert.ok(merchantSimilarity("Swinsta Ent - Freeganj", "Swiggy") >= 0.8);
+    assert.ok(merchantSimilarity("Instamart", "Swiggy") >= 0.8);
+    assert.ok(merchantSimilarity("Blink Commerce Pvt Ltd", "Blinkit") >= 0.8);
+    assert.ok(merchantSimilarity("Clicktech Retail Private Limited", "Amazon") >= 0.8);
+  });
+  test("and nothing else is pulled together", () => {
+    assert.ok(merchantSimilarity("Swinsta Ent", "Zomato") < 0.5);
+    assert.ok(merchantSimilarity("Pine Labs", "Amazon") < 0.5);
+  });
+});
+
+describe("the 26 Aug Swiggy bill", () => {
+  test("files itself against the only charge it can be", () => {
+    const r = { amount: 863.98, currency: "INR", receipt_date: "2026-08-26", merchant: "Swinsta Ent - Freeganj" };
+    const s = scoreCandidate(r, { id: 587, amount: 864, date: "2026-08-26", merchant: "Swiggy", receipt_status: "missing" });
+    assert.equal(decide([{ ...s, transaction_id: 587 }]).action, "auto");
+  });
+});
