@@ -11,6 +11,7 @@ import {
   isSameBill,
   isCovered,
   tippedBill,
+  suggestCharges,
 } from "../lib/matcher.js";
 
 const txn = (o = {}) => ({
@@ -405,5 +406,41 @@ describe("the 26 Aug Swiggy bill", () => {
     const r = { amount: 863.98, currency: "INR", receipt_date: "2026-08-26", merchant: "Swinsta Ent - Freeganj" };
     const s = scoreCandidate(r, { id: 587, amount: 864, date: "2026-08-26", merchant: "Swiggy", receipt_status: "missing" });
     assert.equal(decide([{ ...s, transaction_id: 587 }]).action, "auto");
+  });
+});
+
+describe("suggestCharges", () => {
+  const missing = [
+    { id: 10, merchant: "ZOMATO", amount: 267.9, date: "2026-08-21" },
+    { id: 11, merchant: "UBER INDIA", amount: 314.8, date: "2026-09-09" },
+    { id: 12, merchant: "AIRTEL", amount: 349, date: "2026-08-25" },
+    { id: 13, merchant: "YOUTUBE", amount: 299, date: "2026-08-28" },
+  ];
+
+  test("a misread amount still finds the same merchant", () => {
+    const out = suggestCharges({ merchant: "Zomato", amount: 170882, currency: "INR", receipt_date: "2026-09-05" }, missing);
+    assert.equal(out[0].txn.id, 10);
+  });
+
+  test("a misread date still finds the exact amount", () => {
+    const out = suggestCharges({ merchant: "Uber", amount: 314.8, currency: "INR", receipt_date: "2026-05-09" }, missing);
+    assert.equal(out[0].txn.id, 11);
+  });
+
+  test("an unrelated bill suggests nothing", () => {
+    const out = suggestCharges({ merchant: "Baan Ying Plant-Based", amount: 951, currency: "THB", receipt_date: "2025-09-10" }, missing);
+    assert.deepEqual(out, []);
+  });
+
+  test("the exact amount alone is enough, whatever the name", () => {
+    const out = suggestCharges({ merchant: "Bharti Hexacom", amount: 349, currency: "INR", receipt_date: "2026-08-25" }, missing);
+    assert.equal(out[0].txn.id, 12);
+  });
+
+  test("at most `limit`, best first", () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ id: i, merchant: "Zomato", amount: 100 + i, date: "2026-08-21" }));
+    const out = suggestCharges({ merchant: "Zomato", amount: 107, currency: "INR", receipt_date: "2026-08-21" }, many, { limit: 3 });
+    assert.equal(out.length, 3);
+    assert.equal(out[0].txn.id, 7);
   });
 });
