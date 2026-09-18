@@ -12,6 +12,7 @@ import {
   isCovered,
   tippedBill,
   suggestCharges,
+  billMerchants,
 } from "../lib/matcher.js";
 
 const txn = (o = {}) => ({
@@ -442,5 +443,33 @@ describe("suggestCharges", () => {
     const out = suggestCharges({ merchant: "Zomato", amount: 107, currency: "INR", receipt_date: "2026-08-21" }, many, { limit: 3 });
     assert.equal(out.length, 3);
     assert.equal(out[0].txn.id, 7);
+  });
+});
+
+describe("Google bills name the product on the line items", () => {
+  const google = (desc) => ({
+    merchant: "Google", merchant_raw: "Google Ireland Limited", amount: 299, currency: "INR", receipt_date: "2026-08-16",
+    extracted: { a: { line_items: [{ desc, amount: 253.39 }] } },
+  });
+
+  test("a YouTube Premium invoice is YouTube", () => {
+    assert.equal(billMerchants(google("YouTube Premium")).includes("YouTube"), true);
+    const yt = scoreCandidate(google("YouTube Premium"), txn({ merchant: "YouTube", amount: 299, date: "2026-08-17" }));
+    const amz = scoreCandidate(google("YouTube Premium"), txn({ id: 2, merchant: "Amazon", amount: 299, date: "2026-08-18" }));
+    assert.equal(decide([{ ...yt, transaction_id: 1 }, { ...amz, transaction_id: 2 }]).action, "auto");
+  });
+
+  test("the loose picker puts the exact YouTube charge first", () => {
+    const out = suggestCharges(google("YouTube Premium"), [
+      { id: 571, merchant: "Google Play", amount: 59, date: "2026-09-06" },
+      { id: 253, merchant: "YouTube", amount: 299, date: "2026-08-17" },
+      { id: 248, merchant: "Amazon", amount: 299, date: "2026-08-18" },
+    ]);
+    assert.equal(out[0].txn.id, 253);
+  });
+
+  test("a Google Play invoice is Google Play; other merchants are untouched", () => {
+    assert.equal(billMerchants(google("Google Play purchase")).includes("Google Play"), true);
+    assert.deepEqual(billMerchants({ merchant: "Zomato", extracted: { a: { line_items: [{ desc: "YouTube Premium" }] } } }), ["Zomato"]);
   });
 });
